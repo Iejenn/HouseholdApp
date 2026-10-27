@@ -6,11 +6,10 @@ import type { ChatMessage, Household, UserProfile } from '../types';
 
 function formatTime(ms: number): string {
   const d = new Date(ms);
-  const hours = d.getHours();
+  // 24-hour clock, as is usual in Dutch
+  const hours = d.getHours().toString().padStart(2, '0');
   const mins = d.getMinutes().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const displayHours = hours % 12 || 12;
-  return `${displayHours}:${mins} ${ampm}`;
+  return `${hours}:${mins}`;
 }
 
 // How long (ms) the user needs to hold a bubble before the delete icon appears
@@ -48,7 +47,7 @@ export default function ChatScreen() {
             id: d.id,
             householdId,
             senderId: data.senderId,
-            senderName: data.senderName ?? 'Someone',
+            senderName: data.senderName ?? 'Iemand',
             text: data.text ?? '',
             createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
           });
@@ -152,7 +151,7 @@ export default function ChatScreen() {
               ? otherMembers
                   .map((uid) => memberNames[uid] ?? '…')
                   .join(', ')
-              : 'Just you so far — invite housemates to chat!'}
+              : 'Nog alleen jij — nodig je huisgenoot uit!'}
           </p>
         </div>
       </div>
@@ -161,7 +160,7 @@ export default function ChatScreen() {
         {messages.length === 0 ? (
           <div className="empty-state" style={{ padding: '40px 20px' }}>
             <p style={{ fontSize: 28, marginBottom: 8 }}>💬</p>
-            <p>Say hi to your housemates!</p>
+            <p>Zeg hallo!</p>
           </div>
         ) : (
           messages.map((msg, i) => {
@@ -197,7 +196,7 @@ export default function ChatScreen() {
                           e.stopPropagation();
                           handleDelete(msg.id);
                         }}
-                        aria-label="Delete message"
+                        aria-label="Bericht verwijderen"
                       >
                         ✕
                       </button>
@@ -214,7 +213,7 @@ export default function ChatScreen() {
       <div className="chat-input-bar">
         <input
           className="input chat-input"
-          placeholder="Type a message…"
+          placeholder="Typ een bericht…"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -229,7 +228,7 @@ export default function ChatScreen() {
           className="chat-send-btn"
           onClick={handleSend}
           disabled={sending || !text.trim()}
-          aria-label="Send message"
+          aria-label="Versturen"
         >
           ➤
         </button>

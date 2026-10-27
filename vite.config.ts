@@ -18,9 +18,10 @@ export default defineConfig({
       },
       includeAssets: ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
       manifest: {
-        name: 'Household',
-        short_name: 'Household',
-        description: 'Tasks, hearts, and points for two',
+        name: 'Huishouden',
+        short_name: 'Huishouden',
+        description: 'Taken, boodschappen en een kat voor ons tweeën',
+        lang: 'nl',
         // Must match base, otherwise the installed app opens a 404 on Pages
         start_url: base,
         scope: base,

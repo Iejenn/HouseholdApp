@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  addDoc,
   arrayRemove,
   arrayUnion,
   collection,
@@ -13,56 +12,38 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
-import PointsBoard from '../components/PointsBoard';
-import type { Completion, Household, Recurrence, RecurrenceUnit, Task, UserProfile } from '../types';
+import { useHousehold } from '../context/HouseholdContext';
+import { useNow } from '../hooks/useNow';
+import { TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
+import { isHiddenDone, isTaskDone } from '../lib/time';
+import { dutchError } from '../lib/firebaseErrors';
+import type { Completion, Recurrence, RecurrenceUnit, Task } from '../types';
 
-// Every check-off is worth this many points
+// Every check-off earns the household this many cat points
 const POINTS_PER_TASK = 1;
 
-function formatRecurrence(r: Recurrence): string {
-  const { unit, interval } = r;
-  const unitLabel = interval === 1 ? unit : `${unit}s`;
-  if (interval === 1) {
-    return `every ${unit}`;
-  }
-  if (unit === 'week' && interval === 2) return 'biweekly';
-  return `every ${interval} ${unitLabel}`;
+const UNIT_LABELS: Record<RecurrenceUnit, [string, string]> = {
+  day: ['dag', 'dagen'],
+  week: ['week', 'weken'],
+  month: ['maand', 'maanden'],
+};
+
+function formatRecurrence({ unit, interval }: Recurrence): string {
+  if (interval === 1) return unit === 'day' ? 'elke dag' : `elke ${UNIT_LABELS[unit][0]}`;
+  if (unit === 'week' && interval === 2) return 'om de week';
+  return `elke ${interval} ${UNIT_LABELS[unit][1]}`;
 }
 
 export default function TaskListScreen() {
-  const { user, profile } = useAuth();
-  const [household, setHousehold] = useState<Household | null>(null);
-  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  const { user } = useAuth();
+  const { householdId, household, memberNames, balance } = useHousehold();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [completions, setCompletions] = useState<Completion[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [burstTaskId, setBurstTaskId] = useState<string | null>(null);
-
-  const householdId = profile?.householdId;
-
-  useEffect(() => {
-    if (!householdId) return;
-    const unsub = onSnapshot(doc(db, 'households', householdId), (snap) => {
-      if (snap.exists()) setHousehold(snap.data() as Household);
-    });
-    return unsub;
-  }, [householdId]);
+  const [pointPopId, setPointPopId] = useState<string | null>(null);
+  const now = useNow();
 
   useEffect(() => {
-    if (!household) return;
-    const unsubs = household.memberIds.map((uid) =>
-      onSnapshot(doc(db, 'users', uid), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data() as UserProfile;
-          setMemberNames((prev) => ({ ...prev, [uid]: data.displayName }));
-        }
-      })
-    );
-    return () => unsubs.forEach((u) => u());
-  }, [household]);
-
-  useEffect(() => {
-    if (!householdId) return;
     const q = query(
       collection(db, 'households', householdId, 'tasks'),
       orderBy('createdAt', 'desc')
@@ -73,30 +54,22 @@ export default function TaskListScreen() {
     return unsub;
   }, [householdId]);
 
-  // All check-offs in this household — small for a 2-person household, so
-  // the weekly/total sums are done here instead of in a separate counter doc
-  useEffect(() => {
-    if (!householdId) return;
-    const unsub = onSnapshot(collection(db, 'households', householdId, 'completions'), (snap) => {
-      setCompletions(snap.docs.map((d) => d.data() as Completion));
-    });
-    return unsub;
-  }, [householdId]);
-
   async function toggleComplete(task: Task) {
-    if (!user || !householdId) return;
+    if (!user) return;
     const ref = doc(db, 'households', householdId, 'tasks', task.id);
     const completionsCol = collection(db, 'households', householdId, 'completions');
     // Task update and point record are written together, so you can't get
     // a point without the task actually being checked off (and vice versa)
     const batch = writeBatch(db);
-    if (task.completedAt) {
+    if (isTaskDone(task, Date.now())) {
       batch.update(ref, { completedAt: null, completedBy: null });
       // Unchecking takes the point back
       batch.delete(doc(completionsCol, `${task.id}_${task.completedAt}`));
     } else {
+      // Also used when a recurring task comes back: the old completion stays,
+      // so every round earns a point
       const completedAt = Date.now();
-      batch.update(ref, { completedAt, completedBy: user.uid });
+      batch.update(ref, { completedAt, completedBy: user.uid, hearts: [] });
       const completion: Completion = {
         taskId: task.id,
         uid: user.uid,
@@ -104,12 +77,14 @@ export default function TaskListScreen() {
         completedAt,
       };
       batch.set(doc(completionsCol, `${task.id}_${completedAt}`), completion);
+      setPointPopId(task.id);
+      window.setTimeout(() => setPointPopId((cur) => (cur === task.id ? null : cur)), 900);
     }
     await batch.commit();
   }
 
   async function toggleHeart(task: Task) {
-    if (!user || !householdId) return;
+    if (!user) return;
     const ref = doc(db, 'households', householdId, 'tasks', task.id);
     const alreadyHearted = task.hearts.includes(user.uid);
     if (!alreadyHearted) {
@@ -124,10 +99,15 @@ export default function TaskListScreen() {
   if (!household) {
     return (
       <div className="centered-screen">
-        <p style={{ color: 'var(--color-ink-soft)' }}>Loading your household…</p>
+        <p style={{ color: 'var(--color-ink-soft)' }}>Huishouden laden…</p>
       </div>
     );
   }
+
+  // Open tasks first, then recently finished ones; finished > 72h ago are hidden
+  const withState = tasks.map((t) => ({ task: t, done: isTaskDone(t, now) }));
+  const open = withState.filter((t) => !t.done);
+  const done = withState.filter((t) => t.done && !isHiddenDone(t.task.completedAt, now));
 
   return (
     <>
@@ -136,39 +116,48 @@ export default function TaskListScreen() {
           <h2 className="household-name">{household.name}</h2>
           <span className="invite-code">{household.inviteCode}</span>
         </div>
+        <span className="points-pill" title="Punten voor de kat">
+          🐾 {balance}
+        </span>
       </div>
 
       <div className="app-content">
-        <PointsBoard
-          memberIds={household.memberIds}
-          memberNames={memberNames}
-          completions={completions}
-          myUid={user?.uid}
-        />
-
-        {tasks.length === 0 && (
-          <p className="empty-state">No tasks yet — tap + to add the first one.</p>
+        {open.length === 0 && done.length === 0 && (
+          <p className="empty-state">Nog geen taken — tik op + om er een toe te voegen.</p>
+        )}
+        {open.length === 0 && done.length > 0 && (
+          <p className="empty-state" style={{ padding: '24px 20px' }}>
+            Alles gedaan! 🎉
+          </p>
         )}
 
-        {tasks.map((item) => {
-          const isDone = !!item.completedAt;
+        {[...open, ...done].map(({ task: item, done: isDone }) => {
           const canHeart = isDone && item.completedBy !== user?.uid;
           const iHearted = user ? item.hearts.includes(user.uid) : false;
           const isBursting = burstTaskId === item.id;
+          const group = findTaskGroup(item.category);
 
           return (
             <div className="task-row" key={item.id}>
               <button
                 className={`task-checkbox${isDone ? ' done' : ''}`}
                 onClick={() => toggleComplete(item)}
-                aria-label={isDone ? 'Mark not done' : 'Mark done'}
+                aria-label={isDone ? 'Markeer als niet gedaan' : 'Markeer als gedaan'}
               >
                 {isDone ? '✓' : ''}
+                {pointPopId === item.id && <span className="point-pop">+1 🐾</span>}
               </button>
               <div className="task-info">
-                <p className={`task-title${isDone ? ' done' : ''}`}>{item.title}</p>
+                <p className={`task-title${isDone ? ' done' : ''}`}>
+                  {group && <span className="task-emoji">{group.emoji}</span>}
+                  {item.title}
+                </p>
                 <p className="task-meta">
-                  {item.assignedTo ? memberNames[item.assignedTo] ?? '…' : 'Either of you'}
+                  {isDone && item.completedBy
+                    ? `Gedaan door ${memberNames[item.completedBy] ?? '…'}`
+                    : item.assignedTo
+                      ? memberNames[item.assignedTo] ?? '…'
+                      : 'Allebei'}
                   {item.isRecurring && item.recurrence
                     ? ` · ${formatRecurrence(item.recurrence)}`
                     : ''}
@@ -179,7 +168,7 @@ export default function TaskListScreen() {
                   className={`heart-btn${isBursting ? ' just-hearted' : ''}`}
                   onClick={() => canHeart && toggleHeart(item)}
                   disabled={!canHeart}
-                  aria-label={iHearted ? 'Remove heart' : 'Send a heart'}
+                  aria-label={iHearted ? 'Hartje weghalen' : 'Stuur een hartje'}
                 >
                   <span className="heart-emoji">{item.hearts.length > 0 ? '❤️' : '🤍'}</span>
                   {isBursting && (
@@ -202,14 +191,14 @@ export default function TaskListScreen() {
         })}
       </div>
 
-      <button className="fab" onClick={() => setShowAddModal(true)} aria-label="Add task">
+      <button className="fab" onClick={() => setShowAddModal(true)} aria-label="Taak toevoegen">
         +
       </button>
 
       {showAddModal && (
         <AddTaskModal
           onClose={() => setShowAddModal(false)}
-          householdId={householdId!}
+          householdId={householdId}
           memberIds={household.memberIds}
           memberNames={memberNames}
           createdBy={user!.uid}
@@ -232,58 +221,158 @@ function AddTaskModal({
   memberNames: Record<string, string>;
   createdBy: string;
 }) {
+  const [kind, setKind] = useState<'standard' | 'custom'>('standard');
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [unit, setUnit] = useState<RecurrenceUnit>('week');
   const [interval, setInterval] = useState(1);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const group = TASK_GROUPS.find((g) => g.id === groupId);
+
+  function pickGroup(id: string) {
+    setGroupId(id === groupId ? null : id);
+    setPicked([]);
+    setError(null);
+  }
+
+  function togglePicked(item: string) {
+    setPicked((cur) => (cur.includes(item) ? cur.filter((i) => i !== item) : [...cur, item]));
+    setError(null);
+  }
+
+  // Standard: one task per picked item (e.g. Stofzuigen on two floors = 2 tasks)
+  const newTitles: { title: string; category: string | null }[] =
+    kind === 'custom'
+      ? title.trim()
+        ? [{ title: title.trim(), category: null }]
+        : []
+      : group
+        ? picked.map((item) => ({ title: group.title(item, group.label), category: group.id }))
+        : [];
+
   async function handleAdd() {
-    if (!title.trim()) {
-      setError('Give the task a name.');
+    if (newTitles.length === 0) {
+      setError(kind === 'custom' ? 'Geef de taak een naam.' : 'Kies minstens één taak.');
       return;
     }
-    const newTask: Omit<Task, 'id'> = {
-      householdId,
-      title: title.trim(),
-      notes: null,
-      createdBy,
-      assignedTo,
-      isRecurring,
-      recurrence: isRecurring ? { unit, interval } : null,
-      dueAt: null,
-      completedAt: null,
-      completedBy: null,
-      hearts: [],
-      createdAt: Date.now(),
-    };
-    await addDoc(collection(db, 'households', householdId, 'tasks'), newTask);
-    onClose();
+    setBusy(true);
+    try {
+      const batch = writeBatch(db);
+      const col = collection(db, 'households', householdId, 'tasks');
+      const createdAt = Date.now();
+      newTitles.forEach((t, i) => {
+        const newTask: Omit<Task, 'id'> = {
+          householdId,
+          title: t.title,
+          category: t.category,
+          notes: null,
+          createdBy,
+          assignedTo,
+          isRecurring,
+          recurrence: isRecurring ? { unit, interval } : null,
+          dueAt: null,
+          completedAt: null,
+          completedBy: null,
+          hearts: [],
+          // -i keeps the picked order in the (newest-first) list
+          createdAt: createdAt - i,
+        };
+        batch.set(doc(col), newTask);
+      });
+      await batch.commit();
+      onClose();
+    } catch (err) {
+      setError(dutchError(err, 'Kon de taak niet toevoegen.'));
+      setBusy(false);
+    }
   }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">New task</h3>
+        <h3 className="modal-title">Nieuwe taak</h3>
 
-        <div style={{ marginBottom: 16 }}>
-          <input
-            className="input"
-            placeholder="What needs doing?"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-          />
+        <div className="segmented" role="tablist">
+          <button
+            className={`segmented-item${kind === 'standard' ? ' active' : ''}`}
+            onClick={() => {
+              setKind('standard');
+              setError(null);
+            }}
+          >
+            Standaard taak
+          </button>
+          <button
+            className={`segmented-item${kind === 'custom' ? ' active' : ''}`}
+            onClick={() => {
+              setKind('custom');
+              setError(null);
+            }}
+          >
+            Eigen taak
+          </button>
         </div>
 
-        <span className="field-label">Assign to</span>
+        {kind === 'standard' ? (
+          <>
+            <span className="field-label">Ruimte of onderwerp</span>
+            <div className="group-grid">
+              {TASK_GROUPS.map((g) => (
+                <button
+                  key={g.id}
+                  className={`group-tile${groupId === g.id ? ' active' : ''}`}
+                  onClick={() => pickGroup(g.id)}
+                >
+                  <span className="group-tile-emoji">{g.emoji}</span>
+                  {g.label}
+                </button>
+              ))}
+            </div>
+
+            {group && (
+              <>
+                <span className="field-label">
+                  {group.emoji} {group.label} — kies er een of meer
+                </span>
+                <div className="chip-row">
+                  {group.items.map((item) => (
+                    <button
+                      key={item}
+                      className={`chip${picked.includes(item) ? ' active' : ''}`}
+                      onClick={() => togglePicked(item)}
+                    >
+                      {picked.includes(item) ? '✓ ' : ''}
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <div style={{ marginBottom: 16 }}>
+            <input
+              className="input"
+              placeholder="Wat moet er gebeuren?"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              autoFocus
+            />
+          </div>
+        )}
+
+        <span className="field-label">Voor wie</span>
         <div className="chip-row">
           <button
             className={`chip${assignedTo === null ? ' active' : ''}`}
             onClick={() => setAssignedTo(null)}
           >
-            Either
+            Allebei
           </button>
           {memberIds.map((uid) => (
             <button
@@ -304,19 +393,19 @@ function AddTaskModal({
             style={{ width: 18, height: 18 }}
           />
           <span className="field-label" style={{ margin: 0 }}>
-            Repeats
+            Herhalen
           </span>
         </label>
 
         {isRecurring && (
           <>
-            <span className="field-label">Quick presets</span>
+            <span className="field-label">Snel kiezen</span>
             <div className="chip-row">
               {([
-                { label: 'Daily', unit: 'day', interval: 1 },
-                { label: 'Weekly', unit: 'week', interval: 1 },
-                { label: 'Biweekly', unit: 'week', interval: 2 },
-                { label: 'Monthly', unit: 'month', interval: 1 },
+                { label: 'Dagelijks', unit: 'day', interval: 1 },
+                { label: 'Wekelijks', unit: 'week', interval: 1 },
+                { label: 'Om de week', unit: 'week', interval: 2 },
+                { label: 'Maandelijks', unit: 'month', interval: 1 },
               ] as const).map((p) => (
                 <button
                   key={p.label}
@@ -331,9 +420,9 @@ function AddTaskModal({
               ))}
             </div>
 
-            <span className="field-label">Or customize</span>
+            <span className="field-label">Of zelf instellen</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: 'var(--color-ink-soft)' }}>Every</span>
+              <span style={{ fontSize: 14, color: 'var(--color-ink-soft)' }}>Elke</span>
               <input
                 type="number"
                 min={1}
@@ -349,9 +438,11 @@ function AddTaskModal({
                 className="input"
                 style={{ width: 'auto', padding: '10px 12px' }}
               >
-                <option value="day">day{interval > 1 ? 's' : ''}</option>
-                <option value="week">week{interval > 1 ? 's' : ''}</option>
-                <option value="month">month{interval > 1 ? 's' : ''}</option>
+                {(['day', 'week', 'month'] as const).map((u) => (
+                  <option key={u} value={u}>
+                    {UNIT_LABELS[u][interval > 1 ? 1 : 0]}
+                  </option>
+                ))}
               </select>
             </div>
           </>
@@ -361,11 +452,16 @@ function AddTaskModal({
           <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>
         )}
 
-        <button className="btn btn-primary btn-block" onClick={handleAdd} style={{ marginBottom: 8 }}>
-          Add task
+        <button
+          className="btn btn-primary btn-block"
+          onClick={handleAdd}
+          disabled={busy}
+          style={{ marginBottom: 8 }}
+        >
+          {newTitles.length > 1 ? `${newTitles.length} taken toevoegen` : 'Taak toevoegen'}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onClose}>
-          Cancel
+          Annuleren
         </button>
       </div>
     </div>

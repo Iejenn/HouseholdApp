@@ -9,6 +9,7 @@ import {
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import type { Household } from '../types';
+import { dutchError } from '../lib/firebaseErrors';
 
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -28,7 +29,7 @@ export default function HouseholdSetupScreen() {
 
   async function handleCreate() {
     if (!user || !householdName.trim()) {
-      setError('Give your household a name first.');
+      setError('Geef je huishouden eerst een naam.');
       return;
     }
     setError(null);
@@ -59,7 +60,7 @@ export default function HouseholdSetupScreen() {
         { merge: true }
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create household.');
+      setError(dutchError(err, 'Kon het huishouden niet aanmaken.'));
     } finally {
       setBusy(false);
     }
@@ -67,7 +68,7 @@ export default function HouseholdSetupScreen() {
 
   async function handleJoin() {
     if (!user || !joinCode.trim()) {
-      setError('Enter the invite code your partner shared.');
+      setError('Vul de uitnodigingscode van je partner in.');
       return;
     }
     setError(null);
@@ -81,13 +82,13 @@ export default function HouseholdSetupScreen() {
       // open to any authenticated user.
       const codeSnap = await getDoc(doc(db, 'inviteCodes', code));
       if (!codeSnap.exists()) {
-        setError("That code doesn't match a household. Double-check it.");
+        setError('Deze code hoort bij geen enkel huishouden. Controleer hem nog even.');
         return;
       }
       const data = codeSnap.data();
       const householdId = typeof data?.householdId === 'string' ? data.householdId : undefined;
       if (!householdId) {
-        setError('This invite code is set up incorrectly. Ask them to recreate the household.');
+        setError('Er klopt iets niet met deze code. Vraag je partner het huishouden opnieuw aan te maken.');
         return;
       }
       const householdRef = doc(db, 'households', householdId);
@@ -105,12 +106,12 @@ export default function HouseholdSetupScreen() {
         await runTransaction(db, async (tx) => {
           const freshSnap = await tx.get(householdRef);
           if (!freshSnap.exists()) {
-            throw new Error('This household no longer exists.');
+            throw new Error('Dit huishouden bestaat niet meer.');
           }
           const data = freshSnap.data() as Household;
           if (data.memberIds.includes(user.uid)) return;
           if (data.memberIds.length >= 2) {
-            throw new Error('This household already has two members.');
+            throw new Error('Dit huishouden heeft al twee leden.');
           }
           tx.update(householdRef, { memberIds: [...data.memberIds, user.uid] });
         });
@@ -120,7 +121,7 @@ export default function HouseholdSetupScreen() {
         throw txErr;
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not join household.');
+      setError(dutchError(err, 'Kon niet bij het huishouden aansluiten.'));
     } finally {
       setBusy(false);
     }
@@ -130,33 +131,33 @@ export default function HouseholdSetupScreen() {
     <div className="centered-screen">
       <div className="auth-card">
         <h1 className="brand-title" style={{ fontSize: 26 }}>
-          Hi {profile?.displayName ?? 'there'} 👋
+          Hoi {profile?.displayName ?? 'daar'} 👋
         </h1>
-        <p className="brand-subtitle">Set up or join your household</p>
+        <p className="brand-subtitle">Maak een huishouden aan of sluit je aan</p>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <p className="card-title">Create a new household</p>
+          <p className="card-title">Nieuw huishouden aanmaken</p>
           <div style={{ marginBottom: 12 }}>
             <input
               className="input"
-              placeholder="Household name (e.g. Our place)"
+              placeholder="Naam (bijv. Ons huis)"
               value={householdName}
               onChange={(e) => setHouseholdName(e.target.value)}
             />
           </div>
           <button className="btn btn-primary btn-block" onClick={handleCreate} disabled={busy}>
-            {busy ? 'Please wait…' : 'Create household'}
+            {busy ? 'Even geduld…' : 'Huishouden aanmaken'}
           </button>
         </div>
 
-        <p className="divider-text">— or —</p>
+        <p className="divider-text">— of —</p>
 
         <div className="card">
-          <p className="card-title">Join with an invite code</p>
+          <p className="card-title">Aansluiten met een uitnodigingscode</p>
           <div style={{ marginBottom: 12 }}>
             <input
               className="input"
-              placeholder="6-character code"
+              placeholder="Code van 6 tekens"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               maxLength={6}
@@ -168,7 +169,7 @@ export default function HouseholdSetupScreen() {
             onClick={handleJoin}
             disabled={busy}
           >
-            {busy ? 'Please wait…' : 'Join household'}
+            {busy ? 'Even geduld…' : 'Aansluiten'}
           </button>
         </div>
 

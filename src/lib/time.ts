@@ -32,3 +32,26 @@ export function isTaskDone(task: Task, now: number): boolean {
 export function isHiddenDone(doneAt: number | null, now: number): boolean {
   return doneAt !== null && now - doneAt > HIDE_DONE_AFTER_MS;
 }
+
+function calendarDaysBetween(from: number, to: number): number {
+  return Math.round((startOfDay(to).getTime() - startOfDay(from).getTime()) / 86_400_000);
+}
+
+// "vandaag", "gisteren", "3 dagen geleden", "2 weken geleden", …
+export function formatAgo(ms: number, now: number): string {
+  const days = calendarDaysBetween(ms, now);
+  if (days <= 0) return 'vandaag';
+  if (days === 1) return 'gisteren';
+  if (days < 14) return `${days} dagen geleden`;
+  if (days < 60) return `${Math.floor(days / 7)} weken geleden`;
+  const months = Math.floor(days / 30);
+  return `${months} ${months === 1 ? 'maand' : 'maanden'} geleden`;
+}
+
+// Late = a whole extra period went by after it was due again. A daily task
+// done yesterday is simply due today; done 3 days ago it turns red.
+export function isTaskLate(task: Task, now: number): boolean {
+  if (!task.isRecurring || !task.recurrence || !task.completedAt) return false;
+  const due = nextDueAt(task.completedAt, task.recurrence);
+  return now >= nextDueAt(due, task.recurrence);
+}

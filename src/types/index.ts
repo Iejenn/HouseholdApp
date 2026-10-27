@@ -35,6 +35,10 @@ export interface Task {
   // Id of the standard task group (see data/taskCatalog), null for custom tasks.
   // Optional because tasks created before this existed don't have it.
   category?: string | null;
+  // The check-off before the current one, so unchecking a mis-tap restores
+  // "laatst gedaan" instead of resetting it to "nog nooit"
+  previousCompletedAt?: number | null;
+  previousCompletedBy?: string | null;
 }
 // One doc per check-off in households/{id}/completions. Each one earns the
 // household points to spend on the cat. Doc id is `${taskId}_${completedAt}`

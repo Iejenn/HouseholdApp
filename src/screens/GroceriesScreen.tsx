@@ -14,6 +14,9 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
+import { useUndoableDelete } from '../hooks/useUndoableDelete';
+import SwipeToDelete from '../components/SwipeToDelete';
+import UndoToast from '../components/UndoToast';
 import { isHiddenDone } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
 import type { GroceryItem } from '../types';
@@ -69,13 +72,17 @@ export default function GroceriesScreen() {
     );
   }
 
-  async function remove(item: GroceryItem) {
-    await deleteDoc(doc(db, 'households', householdId, 'groceries', item.id));
-  }
+  // Swipe right to delete, same as tasks (with a few seconds to undo)
+  const swipe = useUndoableDelete<GroceryItem>((item) => {
+    deleteDoc(doc(db, 'households', householdId, 'groceries', item.id)).catch((err) =>
+      console.error('Failed to delete grocery item', err)
+    );
+  });
 
-  const open = items.filter((i) => !i.checkedAt);
+  const visible = items.filter((i) => i.id !== swipe.pending?.id);
+  const open = visible.filter((i) => !i.checkedAt);
   // Got-it items stay visible for 72h so you can still undo a mis-tap
-  const checked = items
+  const checked = visible
     .filter((i) => i.checkedAt && !isHiddenDone(i.checkedAt, now))
     .sort((a, b) => (b.checkedAt ?? 0) - (a.checkedAt ?? 0));
 
@@ -123,7 +130,7 @@ export default function GroceriesScreen() {
             item={item}
             meta={`door ${memberNames[item.addedBy] ?? '…'}`}
             onToggle={() => toggleChecked(item)}
-            onRemove={() => remove(item)}
+            onRemove={() => swipe.remove(item)}
           />
         ))}
 
@@ -136,12 +143,18 @@ export default function GroceriesScreen() {
                 item={item}
                 meta={`gehaald door ${memberNames[item.checkedBy ?? ''] ?? '…'}`}
                 onToggle={() => toggleChecked(item)}
-                onRemove={() => remove(item)}
+                onRemove={() => swipe.remove(item)}
               />
             ))}
           </>
         )}
+
+        {items.length > 0 && (
+          <p className="swipe-hint">Swipe naar rechts om iets van de lijst te halen</p>
+        )}
       </div>
+
+      {swipe.pending && <UndoToast label={swipe.pending.text} onUndo={swipe.undo} />}
     </>
   );
 }
@@ -159,21 +172,20 @@ function GroceryRow({
 }) {
   const isDone = !!item.checkedAt;
   return (
-    <div className="task-row">
-      <button
-        className={`task-checkbox${isDone ? ' done' : ''}`}
-        onClick={onToggle}
-        aria-label={isDone ? 'Terug op de lijst' : 'Gehaald'}
-      >
-        {isDone ? '✓' : ''}
-      </button>
-      <div className="task-info">
-        <p className={`task-title${isDone ? ' done' : ''}`}>{item.text}</p>
-        <p className="task-meta">{meta}</p>
+    <SwipeToDelete onDelete={onRemove}>
+      <div className="task-row">
+        <button
+          className={`task-checkbox${isDone ? ' done' : ''}`}
+          onClick={onToggle}
+          aria-label={isDone ? 'Terug op de lijst' : 'Gehaald'}
+        >
+          {isDone ? '✓' : ''}
+        </button>
+        <div className="task-info">
+          <p className={`task-title${isDone ? ' done' : ''}`}>{item.text}</p>
+          <p className="task-meta">{meta}</p>
+        </div>
       </div>
-      <button className="row-remove" onClick={onRemove} aria-label="Verwijderen">
-        ✕
-      </button>
-    </div>
+    </SwipeToDelete>
   );
 }

@@ -437,14 +437,47 @@
   margin: 20px 0 2px;
 }
 
-.row-remove {
-  background: none;
-  border: none;
-  color: var(--color-ink-soft);
-  font-size: 15px;
-  padding: 8px;
-  cursor: pointer;
-  opacity: 0.6;
+/* ── Task sections per room + overdue ──────────────────────── */
+
+.task-section-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  /* Stays visible while scrolling through a long room */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-bg);
+  padding: 6px 0;
+  margin: 14px 0 0;
+}
+
+.task-section:first-child .task-section-label {
+  margin-top: 0;
+}
+
+.section-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.section-count.late {
+  color: var(--color-danger);
+}
+
+.task-row.late .task-title {
+  color: var(--color-danger);
+}
+
+.task-row.late .task-checkbox {
+  border-color: var(--color-danger);
+}
+
+.task-late-text {
+  color: var(--color-danger);
+  font-weight: 700;
 }
 
 /* ── Add-task modal: standard/custom toggle + room tiles ───── */

@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output (Vite + PWA plugin)
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# Misc
+.DS_Store
+*.log
+.env
+.env.*

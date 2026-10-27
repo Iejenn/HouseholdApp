@@ -10,6 +10,7 @@ import ChatScreen from './screens/ChatScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { listenForTestPush, refreshPush } from './lib/push';
 import InstallPrompt from './components/InstallPrompt';
+import { ErrorBoundary, GlobalErrorBar } from './components/ErrorBoundary';
 import { HouseholdProvider } from './context/HouseholdContext';
 
 type Tab = 'tasks' | 'groceries' | 'cat' | 'chat' | 'settings';
@@ -56,11 +57,15 @@ function MainShell() {
   return (
     <HouseholdProvider>
       <div className="app-shell">
-        {tab === 'tasks' && <TaskListScreen />}
-        {tab === 'groceries' && <GroceriesScreen />}
-        {tab === 'cat' && <CatScreen />}
-        {tab === 'chat' && <ChatScreen />}
-        {tab === 'settings' && <SettingsScreen />}
+        {/* key={tab}: switching tabs clears a crash, so one broken screen
+            never locks you out of the rest of the app */}
+        <ErrorBoundary key={tab}>
+          {tab === 'tasks' && <TaskListScreen />}
+          {tab === 'groceries' && <GroceriesScreen />}
+          {tab === 'cat' && <CatScreen />}
+          {tab === 'chat' && <ChatScreen />}
+          {tab === 'settings' && <SettingsScreen />}
+        </ErrorBoundary>
         <nav className="tabbar">
           {TABS.map((t) => (
             <button
@@ -97,7 +102,10 @@ export default function App() {
     <AuthProvider>
       {/* Android Chrome only: suggests installing the app to the home screen */}
       <InstallPrompt />
-      <RootRouter />
+      <GlobalErrorBar />
+      <ErrorBoundary>
+        <RootRouter />
+      </ErrorBoundary>
     </AuthProvider>
   );
 }

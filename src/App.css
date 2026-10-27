@@ -902,6 +902,54 @@
   transform: translateX(18px);
 }
 
+/* ── Crash / error display ─────────────────────────────────── */
+
+.crash-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin: 0 0 14px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.error-bar {
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-danger);
+  color: white;
+  font-size: 12px;
+}
+
+.error-bar-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.error-bar-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* ── Install banner (Android Chrome) ────────────────────────── */
 
 .install-banner {

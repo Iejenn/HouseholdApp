@@ -13,8 +13,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Our own service worker (src/sw/sw.ts) instead of a generated one,
+      // because it also has to show push notifications
+      strategies: 'injectManifest',
+      srcDir: 'src/sw',
+      filename: 'sw.ts',
       devOptions: {
         enabled: true,
+        type: 'module',
       },
       includeAssets: ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
       manifest: {

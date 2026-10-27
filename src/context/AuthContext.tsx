@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { disablePush } from '../lib/push';
 import type { UserProfile } from '../types';
 
 interface AuthContextValue {
@@ -66,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    // Stop this phone getting the other person's notifications once logged out
+    if (user) await disablePush(user.uid).catch(() => {});
     await firebaseSignOut(auth);
   }
 

@@ -5,6 +5,7 @@ import LoginScreen from './screens/LoginScreen';
 import HouseholdSetupScreen from './screens/HouseholdSetupScreen';
 import TaskListScreen from './screens/TaskListScreen';
 import ChatScreen from './screens/ChatScreen';
+import InstallPrompt from './components/InstallPrompt';
 
 // Location tab removed: reliable live location needs a native app, not a web app
 type Tab = 'tasks' | 'chat';
@@ -57,6 +58,8 @@ function RootRouter() {
 export default function App() {
   return (
     <AuthProvider>
+      {/* Android Chrome only: suggests installing the app to the home screen */}
+      <InstallPrompt />
       <RootRouter />
     </AuthProvider>
   );

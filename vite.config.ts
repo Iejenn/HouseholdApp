@@ -2,8 +2,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// GitHub Pages serves the site from /HouseholdApp/ — the deploy workflow sets
+// BASE_PATH for that; local dev and Bolt keep using the root '/'
+const base = process.env.BASE_PATH ?? '/'
+
 // https://vite.dev/config/
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -16,7 +21,9 @@ export default defineConfig({
         name: 'Household',
         short_name: 'Household',
         description: 'Tasks, hearts, and points for two',
-        start_url: '/',
+        // Must match base, otherwise the installed app opens a 404 on Pages
+        start_url: base,
+        scope: base,
         display: 'standalone',
         background_color: '#f6f2ec',
         theme_color: '#b94e5c',

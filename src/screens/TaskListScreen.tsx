@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -14,6 +15,7 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
+import SwipeToDelete from '../components/SwipeToDelete';
 import { TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
 import { isHiddenDone, isTaskDone } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
@@ -21,6 +23,8 @@ import type { Completion, Recurrence, RecurrenceUnit, Task } from '../types';
 
 // Every check-off earns the household this many cat points
 const POINTS_PER_TASK = 1;
+// How long the "Ongedaan maken" button stays before a swiped task is really deleted
+const UNDO_MS = 4000;
 
 const UNIT_LABELS: Record<RecurrenceUnit, [string, string]> = {
   day: ['dag', 'dagen'],
@@ -41,7 +45,46 @@ export default function TaskListScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [burstTaskId, setBurstTaskId] = useState<string | null>(null);
   const [pointPopId, setPointPopId] = useState<string | null>(null);
+  // Swiped away but not deleted yet, so it can still be undone
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
+  const pendingTimer = useRef<number | null>(null);
+  const pendingRef = useRef<Task | null>(null);
   const now = useNow();
+
+  // Deleting the task doc itself, so a recurring task never comes back.
+  // Points already earned with it are kept.
+  function commitDelete(task: Task) {
+    deleteDoc(doc(db, 'households', householdId, 'tasks', task.id)).catch((err) =>
+      console.error('Failed to delete task', err)
+    );
+  }
+
+  function flushPending() {
+    if (pendingTimer.current) window.clearTimeout(pendingTimer.current);
+    pendingTimer.current = null;
+    if (pendingRef.current) commitDelete(pendingRef.current);
+    pendingRef.current = null;
+  }
+
+  function swipeDelete(task: Task) {
+    flushPending(); // a second swipe finalises the previous one right away
+    pendingRef.current = task;
+    setPendingDelete(task);
+    pendingTimer.current = window.setTimeout(() => {
+      flushPending();
+      setPendingDelete(null);
+    }, UNDO_MS);
+  }
+
+  function undoDelete() {
+    if (pendingTimer.current) window.clearTimeout(pendingTimer.current);
+    pendingTimer.current = null;
+    pendingRef.current = null;
+    setPendingDelete(null);
+  }
+
+  // Switching tabs mid-undo still deletes the task
+  useEffect(() => flushPending, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const q = query(
@@ -105,7 +148,9 @@ export default function TaskListScreen() {
   }
 
   // Open tasks first, then recently finished ones; finished > 72h ago are hidden
-  const withState = tasks.map((t) => ({ task: t, done: isTaskDone(t, now) }));
+  const withState = tasks
+    .filter((t) => t.id !== pendingDelete?.id)
+    .map((t) => ({ task: t, done: isTaskDone(t, now) }));
   const open = withState.filter((t) => !t.done);
   const done = withState.filter((t) => t.done && !isHiddenDone(t.task.completedAt, now));
 
@@ -138,58 +183,73 @@ export default function TaskListScreen() {
           const group = findTaskGroup(item.category);
 
           return (
-            <div className="task-row" key={item.id}>
-              <button
-                className={`task-checkbox${isDone ? ' done' : ''}`}
-                onClick={() => toggleComplete(item)}
-                aria-label={isDone ? 'Markeer als niet gedaan' : 'Markeer als gedaan'}
-              >
-                {isDone ? '✓' : ''}
-                {pointPopId === item.id && <span className="point-pop">+1 🐾</span>}
-              </button>
-              <div className="task-info">
-                <p className={`task-title${isDone ? ' done' : ''}`}>
-                  {group && <span className="task-emoji">{group.emoji}</span>}
-                  {item.title}
-                </p>
-                <p className="task-meta">
-                  {isDone && item.completedBy
-                    ? `Gedaan door ${memberNames[item.completedBy] ?? '…'}`
-                    : item.assignedTo
-                      ? memberNames[item.assignedTo] ?? '…'
-                      : 'Allebei'}
-                  {item.isRecurring && item.recurrence
-                    ? ` · ${formatRecurrence(item.recurrence)}`
-                    : ''}
-                </p>
-              </div>
-              {isDone && (
+            <SwipeToDelete key={item.id} onDelete={() => swipeDelete(item)}>
+              <div className="task-row">
                 <button
-                  className={`heart-btn${isBursting ? ' just-hearted' : ''}`}
-                  onClick={() => canHeart && toggleHeart(item)}
-                  disabled={!canHeart}
-                  aria-label={iHearted ? 'Hartje weghalen' : 'Stuur een hartje'}
+                  className={`task-checkbox${isDone ? ' done' : ''}`}
+                  onClick={() => toggleComplete(item)}
+                  aria-label={isDone ? 'Markeer als niet gedaan' : 'Markeer als gedaan'}
                 >
-                  <span className="heart-emoji">{item.hearts.length > 0 ? '❤️' : '🤍'}</span>
-                  {isBursting && (
-                    <>
-                      <span className="heart-particle" style={{ left: '38%', animationDelay: '0ms' }}>
-                        ❤️
-                      </span>
-                      <span className="heart-particle" style={{ left: '62%', animationDelay: '80ms' }}>
-                        ❤️
-                      </span>
-                      <span className="heart-particle" style={{ left: '50%', animationDelay: '150ms' }}>
-                        ❤️
-                      </span>
-                    </>
-                  )}
+                  {isDone ? '✓' : ''}
+                  {pointPopId === item.id && <span className="point-pop">+1 🐾</span>}
                 </button>
-              )}
-            </div>
+                <div className="task-info">
+                  <p className={`task-title${isDone ? ' done' : ''}`}>
+                    {group && <span className="task-emoji">{group.emoji}</span>}
+                    {item.title}
+                  </p>
+                  <p className="task-meta">
+                    {isDone && item.completedBy
+                      ? `Gedaan door ${memberNames[item.completedBy] ?? '…'}`
+                      : item.assignedTo
+                        ? memberNames[item.assignedTo] ?? '…'
+                        : 'Allebei'}
+                    {item.isRecurring && item.recurrence
+                      ? ` · ${formatRecurrence(item.recurrence)}`
+                      : ''}
+                  </p>
+                </div>
+                {isDone && (
+                  <button
+                    className={`heart-btn${isBursting ? ' just-hearted' : ''}`}
+                    onClick={() => canHeart && toggleHeart(item)}
+                    disabled={!canHeart}
+                    aria-label={iHearted ? 'Hartje weghalen' : 'Stuur een hartje'}
+                  >
+                    <span className="heart-emoji">{item.hearts.length > 0 ? '❤️' : '🤍'}</span>
+                    {isBursting && (
+                      <>
+                        <span className="heart-particle" style={{ left: '38%', animationDelay: '0ms' }}>
+                          ❤️
+                        </span>
+                        <span className="heart-particle" style={{ left: '62%', animationDelay: '80ms' }}>
+                          ❤️
+                        </span>
+                        <span className="heart-particle" style={{ left: '50%', animationDelay: '150ms' }}>
+                          ❤️
+                        </span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </SwipeToDelete>
           );
         })}
+
+        {tasks.length > 0 && (
+          <p className="swipe-hint">Swipe een taak naar rechts om hem te verwijderen</p>
+        )}
       </div>
+
+      {pendingDelete && (
+        <div className="undo-toast" role="status">
+          <span className="undo-text">"{pendingDelete.title}" verwijderd</span>
+          <button className="undo-btn" onClick={undoDelete}>
+            Ongedaan maken
+          </button>
+        </div>
+      )}
 
       <button className="fab" onClick={() => setShowAddModal(true)} aria-label="Taak toevoegen">
         +

@@ -4,7 +4,25 @@ import { useAuth } from '../context/AuthContext';
 import { dutchError } from '../lib/firebaseErrors';
 
 export default function LoginScreen() {
-  const { user, profileError, signIn, signUp, signOut, resetPassword } = useAuth();
+  const { user, profileError, profileMissing, repairProfile, signIn, signUp, signOut, resetPassword } =
+    useAuth();
+  const [repairName, setRepairName] = useState('');
+
+  async function handleRepair() {
+    if (!repairName.trim()) {
+      setError('Vul je naam in om je profiel te herstellen.');
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      await repairProfile(repairName.trim());
+    } catch (err) {
+      setError(dutchError(err, 'Herstellen lukte niet.'));
+    } finally {
+      setBusy(false);
+    }
+  }
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -106,6 +124,29 @@ export default function LoginScreen() {
               <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 8 }}>
                 Inloggen gelukt, maar: {profileError}
               </p>
+              {profileMissing && (
+                <>
+                  <p style={{ fontSize: 13, marginBottom: 8 }}>
+                    Herstel je profiel: je komt terug in je huishouden, met alle taken en punten.
+                  </p>
+                  <input
+                    className="input"
+                    placeholder="Je naam"
+                    value={repairName}
+                    onChange={(e) => setRepairName(e.target.value)}
+                    style={{ marginBottom: 8 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-block"
+                    onClick={handleRepair}
+                    disabled={busy}
+                    style={{ marginBottom: 8 }}
+                  >
+                    {busy ? 'Even geduld…' : 'Profiel herstellen'}
+                  </button>
+                </>
+              )}
               <button type="button" className="link-button" onClick={signOut}>
                 Uitloggen en opnieuw proberen
               </button>

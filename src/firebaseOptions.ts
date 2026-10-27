@@ -12,4 +12,5 @@ export const firebaseOptions = {
 // Public "Web Push certificate" key from Firebase Console → Project settings →
 // Cloud Messaging → Web Push certificates. Public by design, safe to commit.
 // Empty = push notifications stay switched off in the app.
-export const VAPID_KEY = '';
+export const VAPID_KEY =
+  'BM4Tm-sBeAkuC_1jym_Jt0zB2v7LZLF6ndhMHtFhA6Xw2JucO7D_XVtqHb5JPzpPFdfDa4bstgOjDG0kuRl0B5c';

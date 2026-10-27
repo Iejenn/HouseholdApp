@@ -1,0 +1,35 @@
+:root {
+  /* Color */
+  --color-bg: #f6f2ec;
+  --color-surface: #ffffff;
+  --color-surface-alt: #efe6da;
+  --color-ink: #2e2a26;
+  --color-ink-soft: #746c60;
+  --color-primary: #b94e5c;
+  --color-primary-dark: #8f3c48;
+  --color-primary-tint: #f3dde0;
+  --color-sage: #6f8462;
+  --color-sage-tint: #e3e9dd;
+  --color-line: #e5dcd0;
+  --color-danger: #a3402f;
+
+  /* Type */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+
+  /* Scale */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow-card: 0 1px 2px rgba(46, 42, 38, 0.04), 0 4px 16px rgba(46, 42, 38, 0.06);
+  --shadow-fab: 0 6px 20px rgba(185, 78, 92, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
+import { arrayRemove, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
+import { useHousehold } from '../context/HouseholdContext';
 import { disablePush, enablePush, pushStatus, sendTestPush } from '../lib/push';
 import type { PushStatus } from '../lib/push';
 import { dutchError } from '../lib/firebaseErrors';
@@ -15,6 +16,23 @@ const PREFS: { key: keyof NotifyPrefs; label: string; description: string }[] = 
 
 export default function SettingsScreen() {
   const { user, profile, signOut } = useAuth();
+  const { householdId, household, memberNames } = useHousehold();
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  // Takes someone off the member list. Their phone notices and goes back to
+  // the create/join screen; the household and all its data stay with you.
+  async function removeMember(memberUid: string) {
+    const name = memberNames[memberUid] ?? 'deze persoon';
+    if (!window.confirm(`${name} uit het huishouden verwijderen? Met de uitnodigingscode kan diegene later opnieuw aansluiten.`)) {
+      return;
+    }
+    setRemoveError(null);
+    try {
+      await updateDoc(doc(db, 'households', householdId), { memberIds: arrayRemove(memberUid) });
+    } catch (err) {
+      setRemoveError(dutchError(err, 'Verwijderen lukte niet.'));
+    }
+  }
   const [status, setStatus] = useState<PushStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
@@ -144,6 +162,38 @@ export default function SettingsScreen() {
             );
           })}
         </div>
+
+        {household && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <p className="card-title">🏠 {household.name}</p>
+            <p className="settings-note">
+              Uitnodigingscode: <span className="invite-code" style={{ marginTop: 0 }}>{household.inviteCode}</span>
+            </p>
+            {household.memberIds.map((memberUid) => (
+              <div className="toggle-row" key={memberUid}>
+                <span className="toggle-label">
+                  {memberNames[memberUid] ?? '…'}
+                  {memberUid === user?.uid ? ' (jij)' : ''}
+                </span>
+                {memberUid !== user?.uid && (
+                  <button className="btn btn-ghost member-remove" onClick={() => removeMember(memberUid)}>
+                    Verwijderen
+                  </button>
+                )}
+              </div>
+            ))}
+            {household.memberIds.length < 2 && (
+              <p className="settings-note" style={{ marginTop: 10, marginBottom: 0 }}>
+                Nog plek voor één persoon: deel de code hierboven.
+              </p>
+            )}
+            {removeError && (
+              <p className="settings-note" style={{ color: 'var(--color-danger)', marginTop: 10, marginBottom: 0 }}>
+                {removeError}
+              </p>
+            )}
+          </div>
+        )}
 
         <button
           className="btn btn-ghost btn-block"

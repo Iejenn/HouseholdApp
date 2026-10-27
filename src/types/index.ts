@@ -3,8 +3,6 @@ export interface UserProfile {
   displayName: string;
   householdId: string | null;
   createdAt: number;
-  // Persisted so live tracking auto-resumes next time the app opens
-  liveLocationEnabled?: boolean;
 }
 export interface Household {
   id: string;
@@ -33,11 +31,14 @@ export interface Task {
   hearts: string[];
   createdAt: number;
 }
-export interface MemberLocation {
+// One doc per check-off in households/{id}/completions, so points survive
+// even if the task is later edited, reopened or deleted.
+// Doc id is `${taskId}_${completedAt}` so unchecking can find and remove it.
+export interface Completion {
+  taskId: string;
   uid: string;
-  lat: number;
-  lng: number;
-  updatedAt: number;
+  points: number;
+  completedAt: number;
 }
 export interface ChatMessage {
   id: string;

@@ -9,10 +9,15 @@ import {
   orderBy,
   query,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
-import type { Household, Recurrence, RecurrenceUnit, Task, UserProfile } from '../types';
+import PointsBoard from '../components/PointsBoard';
+import type { Completion, Household, Recurrence, RecurrenceUnit, Task, UserProfile } from '../types';
+
+// Every check-off is worth this many points
+const POINTS_PER_TASK = 1;
 
 function formatRecurrence(r: Recurrence): string {
   const { unit, interval } = r;
@@ -29,6 +34,7 @@ export default function TaskListScreen() {
   const [household, setHousehold] = useState<Household | null>(null);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [completions, setCompletions] = useState<Completion[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [burstTaskId, setBurstTaskId] = useState<string | null>(null);
 
@@ -67,14 +73,39 @@ export default function TaskListScreen() {
     return unsub;
   }, [householdId]);
 
+  // All check-offs in this household — small for a 2-person household, so
+  // the weekly/total sums are done here instead of in a separate counter doc
+  useEffect(() => {
+    if (!householdId) return;
+    const unsub = onSnapshot(collection(db, 'households', householdId, 'completions'), (snap) => {
+      setCompletions(snap.docs.map((d) => d.data() as Completion));
+    });
+    return unsub;
+  }, [householdId]);
+
   async function toggleComplete(task: Task) {
     if (!user || !householdId) return;
     const ref = doc(db, 'households', householdId, 'tasks', task.id);
+    const completionsCol = collection(db, 'households', householdId, 'completions');
+    // Task update and point record are written together, so you can't get
+    // a point without the task actually being checked off (and vice versa)
+    const batch = writeBatch(db);
     if (task.completedAt) {
-      await updateDoc(ref, { completedAt: null, completedBy: null });
+      batch.update(ref, { completedAt: null, completedBy: null });
+      // Unchecking takes the point back
+      batch.delete(doc(completionsCol, `${task.id}_${task.completedAt}`));
     } else {
-      await updateDoc(ref, { completedAt: Date.now(), completedBy: user.uid });
+      const completedAt = Date.now();
+      batch.update(ref, { completedAt, completedBy: user.uid });
+      const completion: Completion = {
+        taskId: task.id,
+        uid: user.uid,
+        points: POINTS_PER_TASK,
+        completedAt,
+      };
+      batch.set(doc(completionsCol, `${task.id}_${completedAt}`), completion);
     }
+    await batch.commit();
   }
 
   async function toggleHeart(task: Task) {
@@ -108,6 +139,13 @@ export default function TaskListScreen() {
       </div>
 
       <div className="app-content">
+        <PointsBoard
+          memberIds={household.memberIds}
+          memberNames={memberNames}
+          completions={completions}
+          myUid={user?.uid}
+        />
+
         {tasks.length === 0 && (
           <p className="empty-state">No tasks yet — tap + to add the first one.</p>
         )}

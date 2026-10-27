@@ -15,7 +15,7 @@ export default defineConfig({
       manifest: {
         name: 'Household',
         short_name: 'Household',
-        description: 'Tasks, hearts, and location for two',
+        description: 'Tasks, hearts, and points for two',
         start_url: '/',
         display: 'standalone',
         background_color: '#f6f2ec',

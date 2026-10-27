@@ -380,52 +380,54 @@
   margin-bottom: 16px;
 }
 
-/* ── Location screen ─────────────────────────────────────────── */
+/* ── Points board ──────────────────────────────────────────── */
 
-.location-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-
-.location-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--color-sage-tint);
-  color: var(--color-sage);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-family: var(--font-display);
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.location-name {
-  font-weight: 700;
-  font-size: 15px;
-}
-
-.location-updated {
-  font-size: 12px;
-  color: var(--color-ink-soft);
-  margin-top: 2px;
-}
-
-.map-wrap {
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
+.points-board {
+  padding: 14px 16px;
   margin-bottom: 16px;
-  height: 260px;
 }
 
-.location-stale {
-  color: var(--color-danger);
+.points-header,
+.points-row {
+  display: grid;
+  grid-template-columns: 1fr 52px 52px;
+  align-items: center;
+}
+
+.points-header {
+  margin-bottom: 6px;
+}
+
+.points-col-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-ink-soft);
+  text-align: right;
+}
+
+.points-row {
+  padding: 6px 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.points-name {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.points-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  text-align: right;
+}
+
+.points-week {
+  font-weight: 700;
+  color: var(--color-primary);
 }
 
 /* ── Chat ─────────────────────────────────────────────────────── */

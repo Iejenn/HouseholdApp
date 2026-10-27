@@ -1,32 +1,21 @@
 import { useState } from 'react';
 import './App.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { useLiveLocationSharing } from './hooks/useLiveLocationSharing';
 import LoginScreen from './screens/LoginScreen';
 import HouseholdSetupScreen from './screens/HouseholdSetupScreen';
 import TaskListScreen from './screens/TaskListScreen';
-import LocationScreen from './screens/LocationScreen';
 import ChatScreen from './screens/ChatScreen';
 
-type Tab = 'tasks' | 'location' | 'chat';
+// Location tab removed: reliable live location needs a native app, not a web app
+type Tab = 'tasks' | 'chat';
 
 function MainShell() {
-  const { signOut, profile } = useAuth();
+  const { signOut } = useAuth();
   const [tab, setTab] = useState<Tab>('tasks');
-
-  // Mounted here (not inside LocationScreen) so live tracking keeps running
-  // as the user switches to Chat/Tasks and back — it only stops if this
-  // component itself unmounts (sign-out) or the tab/app is fully closed.
-  const { error: liveLocationError } = useLiveLocationSharing(profile?.liveLocationEnabled ?? false);
 
   return (
     <div className="app-shell">
-      {liveLocationError && (
-        <p style={{ color: 'var(--color-danger)', fontSize: 12, textAlign: 'center', padding: '6px 12px 0' }}>
-          {liveLocationError}
-        </p>
-      )}
-      {tab === 'tasks' ? <TaskListScreen /> : tab === 'location' ? <LocationScreen /> : <ChatScreen />}
+      {tab === 'tasks' ? <TaskListScreen /> : <ChatScreen />}
       <nav className="tabbar">
         <button
           className={`tabbar-item${tab === 'tasks' ? ' active' : ''}`}
@@ -41,13 +30,6 @@ function MainShell() {
         >
           <span className="tabbar-icon">💬</span>
           Chat
-        </button>
-        <button
-          className={`tabbar-item${tab === 'location' ? ' active' : ''}`}
-          onClick={() => setTab('location')}
-        >
-          <span className="tabbar-icon">📍</span>
-          Location
         </button>
         <button className="tabbar-item" onClick={signOut}>
           <span className="tabbar-icon">🚪</span>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { dutchError } from '../lib/firebaseErrors';
 
 export default function LoginScreen() {
   const { signIn, signUp, resetPassword } = useAuth();
@@ -16,7 +17,7 @@ export default function LoginScreen() {
     setError(null);
     setInfo(null);
     if (!email.trim()) {
-      setError('Enter your email above first, then tap "Forgot password?" again.');
+      setError('Vul eerst je e-mailadres in en tik dan opnieuw op "Wachtwoord vergeten?".');
       return;
     }
     setBusy(true);
@@ -24,9 +25,9 @@ export default function LoginScreen() {
       await resetPassword(email.trim());
       // Same message whether or not the account exists, so this can't be
       // used to check which emails are registered
-      setInfo('If an account exists for this email, a reset link is on its way. Check your spam folder too.');
+      setInfo('Als er een account bij dit e-mailadres hoort, is er een resetlink onderweg. Kijk ook in je spam.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send reset email.');
+      setError(dutchError(err, 'Kon de resetmail niet versturen.'));
     } finally {
       setBusy(false);
     }
@@ -37,7 +38,7 @@ export default function LoginScreen() {
     setError(null);
     setInfo(null);
     if (!email || !password || (mode === 'signUp' && !displayName)) {
-      setError('Fill in all fields.');
+      setError('Vul alle velden in.');
       return;
     }
     setBusy(true);
@@ -48,7 +49,7 @@ export default function LoginScreen() {
         await signUp(email.trim(), password, displayName.trim());
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(dutchError(err));
     } finally {
       setBusy(false);
     }
@@ -57,9 +58,9 @@ export default function LoginScreen() {
   return (
     <div className="centered-screen">
       <div className="auth-card">
-        <h1 className="brand-title">🏠 Household</h1>
+        <h1 className="brand-title">🏠 Huishouden</h1>
         <p className="brand-subtitle">
-          {mode === 'signIn' ? 'Welcome back' : 'Create your account'}
+          {mode === 'signIn' ? 'Welkom terug' : 'Maak je account aan'}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -67,7 +68,7 @@ export default function LoginScreen() {
             <div style={{ marginBottom: 12 }}>
               <input
                 className="input"
-                placeholder="Your name"
+                placeholder="Je naam"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 autoComplete="name"
@@ -78,7 +79,7 @@ export default function LoginScreen() {
             <input
               className="input"
               type="email"
-              placeholder="Email"
+              placeholder="E-mailadres"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
@@ -88,7 +89,7 @@ export default function LoginScreen() {
             <input
               className="input"
               type="password"
-              placeholder="Password"
+              placeholder="Wachtwoord"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
@@ -107,7 +108,7 @@ export default function LoginScreen() {
           )}
 
           <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-            {busy ? 'Please wait…' : mode === 'signIn' ? 'Sign in' : 'Sign up'}
+            {busy ? 'Even geduld…' : mode === 'signIn' ? 'Inloggen' : 'Account maken'}
           </button>
         </form>
 
@@ -120,7 +121,7 @@ export default function LoginScreen() {
               disabled={busy}
               style={{ display: 'block', margin: '0 auto 8px' }}
             >
-              Forgot password?
+              Wachtwoord vergeten?
             </button>
           )}
           <button
@@ -132,8 +133,8 @@ export default function LoginScreen() {
             }}
           >
             {mode === 'signIn'
-              ? "Don't have an account? Sign up"
-              : 'Already have an account? Sign in'}
+              ? 'Nog geen account? Registreer je'
+              : 'Al een account? Log in'}
           </button>
         </div>
       </div>

@@ -79,19 +79,19 @@ export default function InstallPrompt() {
     <div className="install-banner">
       <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="install-icon" />
       <div className="install-text">
-        <p className="install-title">Install Household</p>
+        <p className="install-title">Installeer Huishouden</p>
         <p className="install-sub">
           {canPrompt
-            ? 'Add it to your home screen for quick access.'
-            : 'Tap ⋮ in Chrome, then "Add to home screen".'}
+            ? 'Zet de app op je startscherm, dan heb je hem altijd bij de hand.'
+            : 'Tik in Chrome op ⋮ en kies "Toevoegen aan startscherm".'}
         </p>
       </div>
       {canPrompt && (
         <button className="btn btn-primary install-btn" onClick={install}>
-          Install
+          Installeren
         </button>
       )}
-      <button className="install-close" onClick={dismiss} aria-label="Not now">
+      <button className="install-close" onClick={dismiss} aria-label="Niet nu">
         ✕
       </button>
     </div>

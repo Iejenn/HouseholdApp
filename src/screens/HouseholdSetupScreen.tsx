@@ -93,35 +93,36 @@ export default function HouseholdSetupScreen() {
       }
       const householdRef = doc(db, 'households', householdId);
 
-      // Set our own householdId FIRST, before joining. Other members'
-      // clients react the instant they see us added to memberIds and
-      // immediately try to read our users/{uid} doc — if our own
-      // householdId isn't set yet at that moment, their read fails the
-      // household-mate rule check with permission-denied. Setting it first
-      // closes that race. If the join transaction below fails, we roll it
-      // back since we never actually joined.
-      await setDoc(doc(db, 'users', user.uid), { householdId }, { merge: true });
-
-      try {
-        await runTransaction(db, async (tx) => {
-          const freshSnap = await tx.get(householdRef);
-          if (!freshSnap.exists()) {
-            throw new Error('Dit huishouden bestaat niet meer.');
-          }
-          const data = freshSnap.data() as Household;
-          if (data.memberIds.includes(user.uid)) return;
+      // Joining the member list and setting our own householdId happen in ONE
+      // transaction: either both are saved or neither. (Before, householdId was
+      // saved first, which already switched the app to the main screen; if
+      // joining then failed it was rolled back and the error got lost, so it
+      // looked like "nothing happens".) Being atomic also means the partner
+      // never sees us in memberIds without our householdId being set.
+      const userRef = doc(db, 'users', user.uid);
+      await runTransaction(db, async (tx) => {
+        const freshSnap = await tx.get(householdRef);
+        if (!freshSnap.exists()) {
+          throw new Error('Dit huishouden bestaat niet meer.');
+        }
+        const data = freshSnap.data() as Household;
+        if (!data.memberIds.includes(user.uid)) {
           if (data.memberIds.length >= 2) {
             throw new Error('Dit huishouden heeft al twee leden.');
           }
           tx.update(householdRef, { memberIds: [...data.memberIds, user.uid] });
-        });
-      } catch (txErr) {
-        // Join didn't actually happen — undo the premature householdId set
-        await setDoc(doc(db, 'users', user.uid), { householdId: null }, { merge: true }).catch(() => {});
-        throw txErr;
-      }
+        }
+        tx.set(userRef, { householdId }, { merge: true });
+      });
     } catch (err) {
-      setError(dutchError(err, 'Kon niet bij het huishouden aansluiten.'));
+      // Non-members may only read a household that still has room, so
+      // "permission denied" here almost always means it's already full
+      const code = typeof err === 'object' && err && 'code' in err ? err.code : null;
+      setError(
+        code === 'permission-denied'
+          ? 'Dit huishouden heeft al twee leden. Check in Firebase wie er in memberIds staat.'
+          : dutchError(err, 'Kon niet bij het huishouden aansluiten.')
+      );
     } finally {
       setBusy(false);
     }

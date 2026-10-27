@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { dutchError } from '../lib/firebaseErrors';
 
 export default function LoginScreen() {
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { user, profileError, signIn, signUp, signOut, resetPassword } = useAuth();
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -100,6 +100,16 @@ export default function LoginScreen() {
             <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>
               {error}
             </p>
+          )}
+          {user && profileError && (
+            <div className="card crash-card" style={{ marginBottom: 12 }}>
+              <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 8 }}>
+                Inloggen gelukt, maar: {profileError}
+              </p>
+              <button type="button" className="link-button" onClick={signOut}>
+                Uitloggen en opnieuw proberen
+              </button>
+            </div>
           )}
           {info && (
             <p style={{ color: 'var(--color-sage)', fontSize: 13, marginBottom: 12 }}>

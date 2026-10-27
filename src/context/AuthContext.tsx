@@ -16,6 +16,9 @@ import type { UserProfile } from '../types';
 interface AuthContextValue {
   user: User | null;
   profile: UserProfile | null;
+  // Logged in but the profile couldn't be loaded — shown on the login screen
+  // instead of silently staying there
+  profileError: string | null;
   loading: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -29,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -43,11 +47,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
+    setProfileError(null);
     const ref = doc(db, 'users', user.uid);
-    const unsub = onSnapshot(ref, (snap) => {
-      if (snap.exists()) setProfile(snap.data() as UserProfile);
-      setLoading(false);
-    });
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          setProfile(snap.data() as UserProfile);
+          setProfileError(null);
+        } else {
+          setProfile(null);
+          setProfileError(`Je account bestaat, maar je profiel ontbreekt in de database (users/${user.uid}).`);
+        }
+        setLoading(false);
+      },
+      (err) => {
+        setProfile(null);
+        setProfileError(`Je profiel kon niet geladen worden: ${err.code ?? err.message} (users/${user.uid})`);
+        setLoading(false);
+      }
+    );
     return unsub;
   }, [user]);
 
@@ -78,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ user, profile, profileError, loading, signUp, signIn, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

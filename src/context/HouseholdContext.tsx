@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from './AuthContext';
 import type { Completion, Household, Purchase, UserProfile } from '../types';
@@ -19,7 +19,8 @@ interface HouseholdContextValue {
 const HouseholdContext = createContext<HouseholdContextValue | undefined>(undefined);
 
 export function HouseholdProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
+  const uid = user!.uid;
   const householdId = profile!.householdId!;
   const [household, setHousehold] = useState<Household | null>(null);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
@@ -27,20 +28,42 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'households', householdId), (snap) => {
-      if (snap.exists()) setHousehold({ ...(snap.data() as Household), id: snap.id });
-    });
+    // Removed from the household by the other member (or it can no longer be
+    // read at all): clear our own householdId, which sends this phone back to
+    // the create/join screen instead of leaving it stuck on errors
+    const leave = () =>
+      setDoc(doc(db, 'users', uid), { householdId: null }, { merge: true }).catch((err) =>
+        console.error('Could not leave removed household', err)
+      );
+    const unsub = onSnapshot(
+      doc(db, 'households', householdId),
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = { ...(snap.data() as Household), id: snap.id };
+        if (!data.memberIds.includes(uid)) {
+          leave();
+          return;
+        }
+        setHousehold(data);
+      },
+      (err) => {
+        // Only members (or anyone while there's room) may read a household, so
+        // this means we're out. If it was a mistake, joining with the code again
+        // puts us straight back (we'd still be in memberIds).
+        if (err.code === 'permission-denied') leave();
+      }
+    );
     return unsub;
-  }, [householdId]);
+  }, [householdId, uid]);
 
   const memberKey = household?.memberIds.join(',') ?? '';
   useEffect(() => {
     if (!memberKey) return;
-    const unsubs = memberKey.split(',').map((uid) =>
-      onSnapshot(doc(db, 'users', uid), (snap) => {
+    const unsubs = memberKey.split(',').map((memberUid) =>
+      onSnapshot(doc(db, 'users', memberUid), (snap) => {
         if (snap.exists()) {
           const data = snap.data() as UserProfile;
-          setMemberNames((prev) => ({ ...prev, [uid]: data.displayName }));
+          setMemberNames((prev) => ({ ...prev, [memberUid]: data.displayName }));
         }
       })
     );

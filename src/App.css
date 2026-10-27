@@ -866,6 +866,13 @@
   margin-top: 2px;
 }
 
+.member-remove {
+  color: var(--color-danger);
+  padding: 6px 10px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
 /* Checkbox styled as an on/off switch */
 .switch {
   appearance: none;

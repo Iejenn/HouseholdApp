@@ -3,6 +3,13 @@ export interface UserProfile {
   displayName: string;
   householdId: string | null;
   createdAt: number;
+  // Which push notifications this person wants (missing = all on)
+  notify?: NotifyPrefs;
+}
+export interface NotifyPrefs {
+  chat?: boolean;
+  groceries?: boolean;
+  daily?: boolean;
 }
 export interface Household {
   id: string;

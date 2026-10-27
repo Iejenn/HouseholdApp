@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './App.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -7,21 +7,51 @@ import TaskListScreen from './screens/TaskListScreen';
 import GroceriesScreen from './screens/GroceriesScreen';
 import CatScreen from './screens/CatScreen';
 import ChatScreen from './screens/ChatScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import { listenForTestPush, refreshPush } from './lib/push';
 import InstallPrompt from './components/InstallPrompt';
 import { HouseholdProvider } from './context/HouseholdContext';
 
-type Tab = 'tasks' | 'groceries' | 'cat' | 'chat';
+type Tab = 'tasks' | 'groceries' | 'cat' | 'chat' | 'settings';
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'tasks', icon: '✅', label: 'Taken' },
   { id: 'groceries', icon: '🛒', label: 'Boodschappen' },
   { id: 'cat', icon: '🐈‍⬛', label: 'Kat' },
   { id: 'chat', icon: '💬', label: 'Chat' },
+  { id: 'settings', icon: '⚙️', label: 'Instellingen' },
 ];
 
+function isTab(value: unknown): value is Tab {
+  return TABS.some((t) => t.id === value);
+}
+
+// A tapped notification opens the app as …/?tab=chat
+function tabFromUrl(): Tab {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  return isTab(tab) ? tab : 'tasks';
+}
+
 function MainShell() {
-  const { signOut } = useAuth();
-  const [tab, setTab] = useState<Tab>('tasks');
+  const { user } = useAuth();
+  const [tab, setTab] = useState<Tab>(tabFromUrl);
+
+  useEffect(() => {
+    // Notification tapped while the app was already open: switch tab
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'open-tab' && isTab(e.data.tab)) setTab(e.data.tab);
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshPush(user.uid);
+    let stop = () => {};
+    listenForTestPush().then((unsub) => (stop = unsub));
+    return () => stop();
+  }, [user]);
 
   return (
     <HouseholdProvider>
@@ -30,6 +60,7 @@ function MainShell() {
         {tab === 'groceries' && <GroceriesScreen />}
         {tab === 'cat' && <CatScreen />}
         {tab === 'chat' && <ChatScreen />}
+        {tab === 'settings' && <SettingsScreen />}
         <nav className="tabbar">
           {TABS.map((t) => (
             <button
@@ -41,14 +72,6 @@ function MainShell() {
               {t.label}
             </button>
           ))}
-          <button
-            className="tabbar-item"
-            // With 5 tabs a mis-tap is easy, so ask first
-            onClick={() => window.confirm('Wil je uitloggen?') && signOut()}
-          >
-            <span className="tabbar-icon">🚪</span>
-            Uitloggen
-          </button>
         </nav>
       </div>
     </HouseholdProvider>

@@ -1,0 +1,16 @@
+{
+  // Service worker runs in a worker, not a page: separate config with the
+  // WebWorker types instead of the DOM ones
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/sw", "src/firebaseOptions.ts"]
+}

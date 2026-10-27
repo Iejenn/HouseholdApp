@@ -3,17 +3,39 @@ import type { FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  async function handleForgotPassword() {
+    setError(null);
+    setInfo(null);
+    if (!email.trim()) {
+      setError('Enter your email above first, then tap "Forgot password?" again.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await resetPassword(email.trim());
+      // Same message whether or not the account exists, so this can't be
+      // used to check which emails are registered
+      setInfo('If an account exists for this email, a reset link is on its way. Check your spam folder too.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send reset email.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     if (!email || !password || (mode === 'signUp' && !displayName)) {
       setError('Fill in all fields.');
       return;
@@ -78,6 +100,11 @@ export default function LoginScreen() {
               {error}
             </p>
           )}
+          {info && (
+            <p style={{ color: 'var(--color-sage)', fontSize: 13, marginBottom: 12 }}>
+              {info}
+            </p>
+          )}
 
           <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
             {busy ? 'Please wait…' : mode === 'signIn' ? 'Sign in' : 'Sign up'}
@@ -85,9 +112,24 @@ export default function LoginScreen() {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: 18 }}>
+          {mode === 'signIn' && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={handleForgotPassword}
+              disabled={busy}
+              style={{ display: 'block', margin: '0 auto 8px' }}
+            >
+              Forgot password?
+            </button>
+          )}
           <button
             className="link-button"
-            onClick={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')}
+            onClick={() => {
+              setMode(mode === 'signIn' ? 'signUp' : 'signIn');
+              setError(null);
+              setInfo(null);
+            }}
           >
             {mode === 'signIn'
               ? "Don't have an account? Sign up"

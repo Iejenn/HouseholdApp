@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   arrayRemove,
   arrayUnion,
@@ -16,15 +17,15 @@ import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
 import SwipeToDelete from '../components/SwipeToDelete';
+import UndoToast from '../components/UndoToast';
+import { useUndoableDelete } from '../hooks/useUndoableDelete';
 import { TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
-import { isHiddenDone, isTaskDone } from '../lib/time';
+import { formatAgo, isHiddenDone, isTaskDone, isTaskLate } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Completion, Recurrence, RecurrenceUnit, Task } from '../types';
 
 // Every check-off earns the household this many cat points
 const POINTS_PER_TASK = 1;
-// How long the "Ongedaan maken" button stays before a swiped task is really deleted
-const UNDO_MS = 4000;
 
 const UNIT_LABELS: Record<RecurrenceUnit, [string, string]> = {
   day: ['dag', 'dagen'],
@@ -45,46 +46,15 @@ export default function TaskListScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [burstTaskId, setBurstTaskId] = useState<string | null>(null);
   const [pointPopId, setPointPopId] = useState<string | null>(null);
-  // Swiped away but not deleted yet, so it can still be undone
-  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
-  const pendingTimer = useRef<number | null>(null);
-  const pendingRef = useRef<Task | null>(null);
   const now = useNow();
 
   // Deleting the task doc itself, so a recurring task never comes back.
   // Points already earned with it are kept.
-  function commitDelete(task: Task) {
+  const swipe = useUndoableDelete<Task>((task) => {
     deleteDoc(doc(db, 'households', householdId, 'tasks', task.id)).catch((err) =>
       console.error('Failed to delete task', err)
     );
-  }
-
-  function flushPending() {
-    if (pendingTimer.current) window.clearTimeout(pendingTimer.current);
-    pendingTimer.current = null;
-    if (pendingRef.current) commitDelete(pendingRef.current);
-    pendingRef.current = null;
-  }
-
-  function swipeDelete(task: Task) {
-    flushPending(); // a second swipe finalises the previous one right away
-    pendingRef.current = task;
-    setPendingDelete(task);
-    pendingTimer.current = window.setTimeout(() => {
-      flushPending();
-      setPendingDelete(null);
-    }, UNDO_MS);
-  }
-
-  function undoDelete() {
-    if (pendingTimer.current) window.clearTimeout(pendingTimer.current);
-    pendingTimer.current = null;
-    pendingRef.current = null;
-    setPendingDelete(null);
-  }
-
-  // Switching tabs mid-undo still deletes the task
-  useEffect(() => flushPending, []); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   useEffect(() => {
     const q = query(
@@ -105,14 +75,26 @@ export default function TaskListScreen() {
     // a point without the task actually being checked off (and vice versa)
     const batch = writeBatch(db);
     if (isTaskDone(task, Date.now())) {
-      batch.update(ref, { completedAt: null, completedBy: null });
-      // Unchecking takes the point back
+      // Unchecking: put back the check-off before this one (keeps "laatst gedaan")
+      batch.update(ref, {
+        completedAt: task.previousCompletedAt ?? null,
+        completedBy: task.previousCompletedBy ?? null,
+        previousCompletedAt: null,
+        previousCompletedBy: null,
+      });
+      // ...and take the point back
       batch.delete(doc(completionsCol, `${task.id}_${task.completedAt}`));
     } else {
       // Also used when a recurring task comes back: the old completion stays,
       // so every round earns a point
       const completedAt = Date.now();
-      batch.update(ref, { completedAt, completedBy: user.uid, hearts: [] });
+      batch.update(ref, {
+        completedAt,
+        completedBy: user.uid,
+        previousCompletedAt: task.completedAt ?? null,
+        previousCompletedBy: task.completedBy ?? null,
+        hearts: [],
+      });
       const completion: Completion = {
         taskId: task.id,
         uid: user.uid,
@@ -147,12 +129,97 @@ export default function TaskListScreen() {
     );
   }
 
-  // Open tasks first, then recently finished ones; finished > 72h ago are hidden
-  const withState = tasks
-    .filter((t) => t.id !== pendingDelete?.id)
-    .map((t) => ({ task: t, done: isTaskDone(t, now) }));
-  const open = withState.filter((t) => !t.done);
-  const done = withState.filter((t) => t.done && !isHiddenDone(t.task.completedAt, now));
+  const visible = tasks.filter((t) => t.id !== swipe.pending?.id);
+  const open = visible.filter((t) => !isTaskDone(t, now));
+  // Finished more than 72h ago: hidden (recurring ones return when due)
+  const done = visible.filter((t) => isTaskDone(t, now) && !isHiddenDone(t.completedAt, now));
+
+  // Open tasks per room/topic, in catalog order, custom tasks without a room last.
+  // Within a room the overdue (red) ones come first.
+  const sections = [...TASK_GROUPS.map((g) => g.id), null].flatMap((groupId) => {
+    const inGroup = open.filter((t) =>
+      groupId === null ? !findTaskGroup(t.category) : t.category === groupId
+    );
+    if (inGroup.length === 0) return [];
+    inGroup.sort((x, y) => Number(isTaskLate(y, now)) - Number(isTaskLate(x, now)));
+    return [{ groupId, tasks: inGroup }];
+  });
+
+  function renderTask(item: Task, isDone: boolean) {
+    const canHeart = isDone && item.completedBy !== user?.uid;
+    const iHearted = user ? item.hearts.includes(user.uid) : false;
+    const isBursting = burstTaskId === item.id;
+    const group = findTaskGroup(item.category);
+    const recurring = item.isRecurring && item.recurrence;
+    const late = !isDone && isTaskLate(item, now);
+    const who = item.assignedTo ? memberNames[item.assignedTo] ?? '…' : 'Allebei';
+    const doneBy = item.completedBy ? memberNames[item.completedBy] ?? '…' : '…';
+
+    // Recurring tasks show when they were last done instead of being struck through
+    let meta: ReactNode;
+    if (recurring) {
+      const lastDone = item.completedAt
+        ? isDone
+          ? `${formatAgo(item.completedAt, now)} gedaan door ${doneBy}`
+          : `laatst ${formatAgo(item.completedAt, now)}`
+        : 'nog nooit gedaan';
+      meta = (
+        <>
+          {!isDone && `${who} · `}
+          {formatRecurrence(item.recurrence!)} ·{' '}
+          <span className={late ? 'task-late-text' : undefined}>{lastDone}</span>
+        </>
+      );
+    } else {
+      meta = isDone ? `Gedaan door ${doneBy}` : who;
+    }
+
+    return (
+      <SwipeToDelete key={item.id} onDelete={() => swipe.remove(item)}>
+        <div className={`task-row${late ? ' late' : ''}`}>
+          <button
+            className={`task-checkbox${isDone ? ' done' : ''}`}
+            onClick={() => toggleComplete(item)}
+            aria-label={isDone ? 'Markeer als niet gedaan' : 'Markeer als gedaan'}
+          >
+            {isDone ? '✓' : ''}
+            {pointPopId === item.id && <span className="point-pop">+1 🐾</span>}
+          </button>
+          <div className="task-info">
+            <p className={`task-title${isDone && !recurring ? ' done' : ''}`}>
+              {/* Open tasks sit under their room header, so only done ones need the emoji */}
+              {isDone && group && <span className="task-emoji">{group.emoji}</span>}
+              {item.title}
+            </p>
+            <p className="task-meta">{meta}</p>
+          </div>
+          {isDone && (
+            <button
+              className={`heart-btn${isBursting ? ' just-hearted' : ''}`}
+              onClick={() => canHeart && toggleHeart(item)}
+              disabled={!canHeart}
+              aria-label={iHearted ? 'Hartje weghalen' : 'Stuur een hartje'}
+            >
+              <span className="heart-emoji">{item.hearts.length > 0 ? '❤️' : '🤍'}</span>
+              {isBursting && (
+                <>
+                  <span className="heart-particle" style={{ left: '38%', animationDelay: '0ms' }}>
+                    ❤️
+                  </span>
+                  <span className="heart-particle" style={{ left: '62%', animationDelay: '80ms' }}>
+                    ❤️
+                  </span>
+                  <span className="heart-particle" style={{ left: '50%', animationDelay: '150ms' }}>
+                    ❤️
+                  </span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </SwipeToDelete>
+    );
+  }
 
   return (
     <>
@@ -176,80 +243,39 @@ export default function TaskListScreen() {
           </p>
         )}
 
-        {[...open, ...done].map(({ task: item, done: isDone }) => {
-          const canHeart = isDone && item.completedBy !== user?.uid;
-          const iHearted = user ? item.hearts.includes(user.uid) : false;
-          const isBursting = burstTaskId === item.id;
-          const group = findTaskGroup(item.category);
-
+        {sections.map(({ groupId, tasks: groupTasks }) => {
+          const group = findTaskGroup(groupId);
+          const lateCount = groupTasks.filter((t) => isTaskLate(t, now)).length;
           return (
-            <SwipeToDelete key={item.id} onDelete={() => swipeDelete(item)}>
-              <div className="task-row">
-                <button
-                  className={`task-checkbox${isDone ? ' done' : ''}`}
-                  onClick={() => toggleComplete(item)}
-                  aria-label={isDone ? 'Markeer als niet gedaan' : 'Markeer als gedaan'}
-                >
-                  {isDone ? '✓' : ''}
-                  {pointPopId === item.id && <span className="point-pop">+1 🐾</span>}
-                </button>
-                <div className="task-info">
-                  <p className={`task-title${isDone ? ' done' : ''}`}>
-                    {group && <span className="task-emoji">{group.emoji}</span>}
-                    {item.title}
-                  </p>
-                  <p className="task-meta">
-                    {isDone && item.completedBy
-                      ? `Gedaan door ${memberNames[item.completedBy] ?? '…'}`
-                      : item.assignedTo
-                        ? memberNames[item.assignedTo] ?? '…'
-                        : 'Allebei'}
-                    {item.isRecurring && item.recurrence
-                      ? ` · ${formatRecurrence(item.recurrence)}`
-                      : ''}
-                  </p>
-                </div>
-                {isDone && (
-                  <button
-                    className={`heart-btn${isBursting ? ' just-hearted' : ''}`}
-                    onClick={() => canHeart && toggleHeart(item)}
-                    disabled={!canHeart}
-                    aria-label={iHearted ? 'Hartje weghalen' : 'Stuur een hartje'}
-                  >
-                    <span className="heart-emoji">{item.hearts.length > 0 ? '❤️' : '🤍'}</span>
-                    {isBursting && (
-                      <>
-                        <span className="heart-particle" style={{ left: '38%', animationDelay: '0ms' }}>
-                          ❤️
-                        </span>
-                        <span className="heart-particle" style={{ left: '62%', animationDelay: '80ms' }}>
-                          ❤️
-                        </span>
-                        <span className="heart-particle" style={{ left: '50%', animationDelay: '150ms' }}>
-                          ❤️
-                        </span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-            </SwipeToDelete>
+            <section key={groupId ?? 'overig'} className="task-section">
+              <p className="section-label task-section-label">
+                <span>{group ? `${group.emoji} ${group.label}` : '📌 Overig'}</span>
+                <span className={`section-count${lateCount ? ' late' : ''}`}>
+                  {lateCount ? `${lateCount} te laat · ` : ''}
+                  {groupTasks.length}
+                </span>
+              </p>
+              {groupTasks.map((t) => renderTask(t, false))}
+            </section>
           );
         })}
+
+        {done.length > 0 && (
+          <section className="task-section">
+            <p className="section-label task-section-label">
+              <span>✓ Gedaan</span>
+              <span className="section-count">{done.length}</span>
+            </p>
+            {done.map((t) => renderTask(t, true))}
+          </section>
+        )}
 
         {tasks.length > 0 && (
           <p className="swipe-hint">Swipe een taak naar rechts om hem te verwijderen</p>
         )}
       </div>
 
-      {pendingDelete && (
-        <div className="undo-toast" role="status">
-          <span className="undo-text">"{pendingDelete.title}" verwijderd</span>
-          <button className="undo-btn" onClick={undoDelete}>
-            Ongedaan maken
-          </button>
-        </div>
-      )}
+      {swipe.pending && <UndoToast label={swipe.pending.title} onUndo={swipe.undo} />}
 
       <button className="fab" onClick={() => setShowAddModal(true)} aria-label="Taak toevoegen">
         +
@@ -288,7 +314,12 @@ function AddTaskModal({
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [unit, setUnit] = useState<RecurrenceUnit>('week');
-  const [interval, setInterval] = useState(1);
+  // Kept as text so the field can be emptied while typing (a number state
+  // snapped straight back to 1, so you couldn't delete the digit)
+  const [intervalText, setIntervalText] = useState('1');
+  const interval = Math.min(365, Math.max(1, parseInt(intervalText) || 1));
+  // Room for a custom task, so it lands in the right section of the list
+  const [customCategory, setCustomCategory] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -309,7 +340,7 @@ function AddTaskModal({
   const newTitles: { title: string; category: string | null }[] =
     kind === 'custom'
       ? title.trim()
-        ? [{ title: title.trim(), category: null }]
+        ? [{ title: title.trim(), category: customCategory }]
         : []
       : group
         ? picked.map((item) => ({ title: group.title(item, group.label), category: group.id }))
@@ -415,15 +446,35 @@ function AddTaskModal({
             )}
           </>
         ) : (
-          <div style={{ marginBottom: 16 }}>
-            <input
-              className="input"
-              placeholder="Wat moet er gebeuren?"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              autoFocus
-            />
-          </div>
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <input
+                className="input"
+                placeholder="Wat moet er gebeuren?"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <span className="field-label">Ruimte of onderwerp</span>
+            <div className="chip-row">
+              <button
+                className={`chip${customCategory === null ? ' active' : ''}`}
+                onClick={() => setCustomCategory(null)}
+              >
+                📌 Overig
+              </button>
+              {TASK_GROUPS.map((g) => (
+                <button
+                  key={g.id}
+                  className={`chip${customCategory === g.id ? ' active' : ''}`}
+                  onClick={() => setCustomCategory(g.id)}
+                >
+                  {g.emoji} {g.label}
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         <span className="field-label">Voor wie</span>
@@ -472,7 +523,7 @@ function AddTaskModal({
                   className={`chip${unit === p.unit && interval === p.interval ? ' active' : ''}`}
                   onClick={() => {
                     setUnit(p.unit as RecurrenceUnit);
-                    setInterval(p.interval);
+                    setIntervalText(String(p.interval));
                   }}
                 >
                   {p.label}
@@ -487,8 +538,11 @@ function AddTaskModal({
                 type="number"
                 min={1}
                 max={365}
-                value={interval}
-                onChange={(e) => setInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                inputMode="numeric"
+                value={intervalText}
+                onChange={(e) => setIntervalText(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                // Left empty or 0: fall back to 1 when leaving the field
+                onBlur={() => setIntervalText(String(interval))}
                 className="input"
                 style={{ width: 70, textAlign: 'center', padding: '10px 8px' }}
               />

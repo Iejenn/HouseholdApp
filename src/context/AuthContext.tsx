@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, limit, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { disablePush } from '../lib/push';
 import type { UserProfile } from '../types';
@@ -19,6 +19,9 @@ interface AuthContextValue {
   // Logged in but the profile couldn't be loaded — shown on the login screen
   // instead of silently staying there
   profileError: string | null;
+  // Logged in, but users/{uid} doesn't exist (so it can be rebuilt)
+  profileMissing: boolean;
+  repairProfile: (displayName: string) => Promise<void>;
   loading: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -33,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileMissing, setProfileMissing] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -52,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onSnapshot(
       ref,
       (snap) => {
+        setProfileMissing(!snap.exists());
         if (snap.exists()) {
           setProfile(snap.data() as UserProfile);
           setProfileError(null);
@@ -81,6 +86,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await setDoc(doc(db, 'users', cred.user.uid), newProfile);
   }
 
+  // Rebuilds a missing users/{uid} doc. The household is found again via its
+  // member list, so you land back in the same household with all its data.
+  async function repairProfile(displayName: string) {
+    if (!user) return;
+    const households = await getDocs(
+      query(collection(db, 'households'), where('memberIds', 'array-contains', user.uid), limit(1))
+    );
+    const repaired: UserProfile = {
+      uid: user.uid,
+      displayName,
+      householdId: households.empty ? null : households.docs[0].id,
+      createdAt: Date.now(),
+    };
+    await setDoc(doc(db, 'users', user.uid), repaired);
+  }
+
   async function signIn(email: string, password: string) {
     await signInWithEmailAndPassword(auth, email, password);
   }
@@ -97,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, profileError, loading, signUp, signIn, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ user, profile, profileError, profileMissing, repairProfile, loading, signUp, signIn, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

@@ -17,6 +17,7 @@ meldingen naartoe bij:
 - een nieuw chatbericht (`notifyChatMessage`)
 - een nieuwe boodschap (`notifyGroceryAdded`)
 - elke ochtend om 8:30 als er taken te laat zijn of de kat honger heeft (`dailyReminder`)
+- elke maandag om 9:00 een weekoverzicht (`weeklySummary`)
 - de knop "Stuur testmelding" in Instellingen (`sendTestPush`)
 
 ### Cloud Functions publiceren (via Google Cloud Shell, niets installeren)

@@ -176,6 +176,71 @@ export const dailyReminder = onSchedule(
   }
 );
 
+// ── Weekly summary ─────────────────────────────────────────────────
+// Monday morning: who did how much last week, and which room got the most
+// love. Labels mirror src/data/taskCatalog.ts.
+
+const GROUP_LABELS = {
+  stofzuigen: '🧹 Stofzuigen',
+  dweilen: '🪣 Dweilen',
+  badkamer: '🛁 Badkamer',
+  keuken: '🍳 Keuken',
+  woonkamer: '🛋️ Woonkamer',
+  slaapkamer: '🛏️ Slaapkamer',
+  was: '🧺 Was',
+  afval: '🗑️ Afval',
+  tuin: '🌿 Tuin & balkon',
+};
+
+export const weeklySummary = onSchedule(
+  { schedule: '0 9 * * 1', timeZone: TIME_ZONE },
+  async () => {
+    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const households = await db.collection('households').get();
+
+    for (const household of households.docs) {
+      const [completions, tasks] = await Promise.all([
+        household.ref.collection('completions').where('completedAt', '>=', since).get(),
+        household.ref.collection('tasks').get(),
+      ]);
+      const memberIds = household.get('memberIds') ?? [];
+      const catName = household.get('catName')?.trim() || 'Poes';
+
+      const perUser = new Map();
+      const perGroup = new Map();
+      const categoryOf = new Map(tasks.docs.map((t) => [t.id, t.get('category')]));
+      for (const c of completions.docs) {
+        const uid = c.get('uid');
+        perUser.set(uid, (perUser.get(uid) ?? 0) + 1);
+        const group = categoryOf.get(c.get('taskId'));
+        if (group && GROUP_LABELS[group]) perGroup.set(group, (perGroup.get(group) ?? 0) + 1);
+      }
+
+      let body;
+      if (completions.size === 0) {
+        body = `Een rustige week: geen taken afgevinkt. ${catName} rekent deze week op jullie! 🐾`;
+      } else {
+        const names = await Promise.all(
+          memberIds.map(async (uid) => {
+            const u = await db.collection('users').doc(uid).get();
+            return `${u.get('displayName') ?? '?'} ${perUser.get(uid) ?? 0}`;
+          })
+        );
+        const top = [...perGroup.entries()].sort((a, b) => b[1] - a[1])[0];
+        body =
+          `${names.join(' · ')} ${completions.size === 1 ? 'taak' : 'taken'}.` +
+          (top ? ` Meeste aandacht: ${GROUP_LABELS[top[0]]}.` : '') +
+          ` Samen ${completions.size} 🐾 verdiend!`;
+      }
+
+      const to = await recipients(household.id, null, 'weekly');
+      await Promise.all(
+        to.map((uid) => sendToUser(uid, { title: '📊 Jullie week', body, tab: 'tasks', tag: 'weekly' }))
+      );
+    }
+  }
+);
+
 // ── Test button in Instellingen ────────────────────────────────────
 
 export const sendTestPush = onCall(async (request) => {

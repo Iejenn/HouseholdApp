@@ -10,6 +10,7 @@ export interface NotifyPrefs {
   chat?: boolean;
   groceries?: boolean;
   daily?: boolean;
+  weekly?: boolean;
 }
 export interface Household {
   id: string;
@@ -19,6 +20,8 @@ export interface Household {
   createdAt: number;
   // Name of the household's digital cat (missing on older households)
   catName?: string;
+  // Chosen wallpaper/floor/collar/hat for the cat (ids from data/catShop)
+  catLook?: Partial<Record<'wall' | 'floor' | 'collar' | 'hat', string | null>>;
 }
 export type RecurrenceUnit = 'day' | 'week' | 'month';
 export interface Recurrence {

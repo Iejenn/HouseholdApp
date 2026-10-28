@@ -40,9 +40,13 @@ export default function GroceriesScreen() {
     return unsub;
   }, [householdId]);
 
-  async function handleAdd(e: FormEvent) {
+  function handleAdd(e: FormEvent) {
     e.preventDefault();
-    const trimmed = text.trim();
+    addItem(text);
+  }
+
+  async function addItem(value: string) {
+    const trimmed = value.trim();
     if (!trimmed || !user) return;
     setText('');
     setError(null);
@@ -86,6 +90,24 @@ export default function GroceriesScreen() {
     .filter((i) => i.checkedAt && !isHiddenDone(i.checkedAt, now))
     .sort((a, b) => (b.checkedAt ?? 0) - (a.checkedAt ?? 0));
 
+  // Quick-add buttons: things bought before (checked-off items stay in the
+  // database), most often first. While typing they filter like autocomplete.
+  const openNames = new Set(open.map((i) => i.text.trim().toLowerCase()));
+  const history = new Map<string, { label: string; count: number; last: number }>();
+  for (const i of items) {
+    const key = i.text.trim().toLowerCase();
+    const entry = history.get(key) ?? { label: i.text.trim(), count: 0, last: 0 };
+    entry.count += 1;
+    if (i.createdAt > entry.last) entry.last = i.createdAt;
+    history.set(key, entry);
+  }
+  const typed = text.trim().toLowerCase();
+  const suggestions = [...history.entries()]
+    .filter(([key, e]) => !openNames.has(key) && (typed ? key.includes(typed) && key !== typed : e.count >= 2))
+    .sort(([, a], [, b]) => b.count - a.count || b.last - a.last)
+    .slice(0, 8)
+    .map(([, e]) => e.label);
+
   return (
     <>
       <div className="app-header">
@@ -111,6 +133,15 @@ export default function GroceriesScreen() {
           Toevoegen
         </button>
       </form>
+      {suggestions.length > 0 && (
+        <div className="grocery-suggestions">
+          {suggestions.map((label) => (
+            <button key={label} className="chip" onClick={() => addItem(label)}>
+              + {label}
+            </button>
+          ))}
+        </div>
+      )}
       {error && (
         <p style={{ color: 'var(--color-danger)', fontSize: 13, padding: '0 20px 8px' }}>{error}</p>
       )}

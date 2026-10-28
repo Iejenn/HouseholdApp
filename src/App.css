@@ -553,6 +553,25 @@
   flex-shrink: 0;
 }
 
+/* One scrollable row of quick-add buttons under the input */
+.grocery-suggestions {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 20px 12px;
+  scrollbar-width: none;
+}
+
+.grocery-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.grocery-suggestions .chip {
+  flex-shrink: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+
 /* ── Cat ───────────────────────────────────────────────────── */
 
 .cat-name-btn {

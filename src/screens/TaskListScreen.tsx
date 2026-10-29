@@ -19,6 +19,7 @@ import { useNow } from '../hooks/useNow';
 import SwipeToDelete from '../components/SwipeToDelete';
 import UndoToast from '../components/UndoToast';
 import { useUndoableDelete } from '../hooks/useUndoableDelete';
+import { nudgeTask } from '../lib/push';
 import { TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
 import { formatAgo, isHiddenDone, isTaskDone, isTaskLate } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
@@ -44,6 +45,7 @@ export default function TaskListScreen() {
   const { householdId, household, memberNames, balance } = useHousehold();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [burstTaskId, setBurstTaskId] = useState<string | null>(null);
   const [pointPopId, setPointPopId] = useState<string | null>(null);
   const now = useNow();
@@ -173,9 +175,22 @@ export default function TaskListScreen() {
     } else {
       meta = isDone ? `Gedaan door ${doneBy}` : who;
     }
+    // Show for a day that someone asked for this to be done
+    if (!isDone && item.lastNudgedAt && now - item.lastNudgedAt < 24 * 60 * 60 * 1000) {
+      meta = (
+        <>
+          {meta} · <span className="task-nudged">👉 gepord</span>
+        </>
+      );
+    }
 
     return (
-      <SwipeToDelete key={item.id} onDelete={() => swipe.remove(item)}>
+      <SwipeToDelete
+        key={item.id}
+        onDelete={() => swipe.remove(item)}
+        onSwipeLeft={() => setEditingTask(item)}
+        leftLabel="✏️ Bewerken · 👉 Porren"
+      >
         <div className={`task-row${late ? ' late' : ''}`}>
           <button
             className={`task-checkbox${isDone ? ' done' : ''}`}
@@ -271,7 +286,9 @@ export default function TaskListScreen() {
         )}
 
         {tasks.length > 0 && (
-          <p className="swipe-hint">Swipe een taak naar rechts om hem te verwijderen</p>
+          <p className="swipe-hint">
+            Swipe naar rechts om te verwijderen, naar links om te bewerken of te porren
+          </p>
         )}
       </div>
 
@@ -290,6 +307,19 @@ export default function TaskListScreen() {
           createdBy={user!.uid}
         />
       )}
+
+      {editingTask && (
+        <AddTaskModal
+          // key: fresh form state for each task
+          key={editingTask.id}
+          onClose={() => setEditingTask(null)}
+          householdId={householdId}
+          memberIds={household.memberIds}
+          memberNames={memberNames}
+          createdBy={user!.uid}
+          editing={editingTask}
+        />
+      )}
     </>
   );
 }
@@ -300,28 +330,52 @@ function AddTaskModal({
   memberIds,
   memberNames,
   createdBy,
+  editing,
 }: {
   onClose: () => void;
   householdId: string;
   memberIds: string[];
   memberNames: Record<string, string>;
   createdBy: string;
+  // Set when opened by swiping a task left: edit that task instead of adding
+  editing?: Task;
 }) {
-  const [kind, setKind] = useState<'standard' | 'custom'>('standard');
+  // Editing always uses the simple form (name + room), also for standard tasks
+  const [kind, setKind] = useState<'standard' | 'custom'>(editing ? 'custom' : 'standard');
   const [groupId, setGroupId] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
-  const [title, setTitle] = useState('');
-  const [assignedTo, setAssignedTo] = useState<string | null>(null);
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [unit, setUnit] = useState<RecurrenceUnit>('week');
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [assignedTo, setAssignedTo] = useState<string | null>(editing?.assignedTo ?? null);
+  const [isRecurring, setIsRecurring] = useState(editing?.isRecurring ?? false);
+  const [unit, setUnit] = useState<RecurrenceUnit>(editing?.recurrence?.unit ?? 'week');
   // Kept as text so the field can be emptied while typing (a number state
   // snapped straight back to 1, so you couldn't delete the digit)
-  const [intervalText, setIntervalText] = useState('1');
+  const [intervalText, setIntervalText] = useState(String(editing?.recurrence?.interval ?? 1));
   const interval = Math.min(365, Math.max(1, parseInt(intervalText) || 1));
   // Room for a custom task, so it lands in the right section of the list
-  const [customCategory, setCustomCategory] = useState<string | null>(null);
+  const [customCategory, setCustomCategory] = useState<string | null>(editing?.category ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nudgeState, setNudgeState] = useState<'idle' | 'busy' | 'sent'>('idle');
+  const [nudgeError, setNudgeError] = useState<string | null>(null);
+  const partner = memberIds.find((uid) => uid !== createdBy);
+
+  async function handleNudge() {
+    if (!editing) return;
+    setNudgeState('busy');
+    setNudgeError(null);
+    try {
+      const ok = await nudgeTask(householdId, editing.id);
+      if (ok) setNudgeState('sent');
+      else {
+        setNudgeState('idle');
+        setNudgeError('Je partner heeft porren uitgezet, of nog geen meldingen aan.');
+      }
+    } catch (err) {
+      setNudgeState('idle');
+      setNudgeError(dutchError(err, 'Porren lukte niet.'));
+    }
+  }
 
   const group = TASK_GROUPS.find((g) => g.id === groupId);
 
@@ -352,6 +406,22 @@ function AddTaskModal({
       return;
     }
     setBusy(true);
+    if (editing) {
+      try {
+        await updateDoc(doc(db, 'households', householdId, 'tasks', editing.id), {
+          title: newTitles[0].title,
+          category: newTitles[0].category,
+          assignedTo,
+          isRecurring,
+          recurrence: isRecurring ? { unit, interval } : null,
+        });
+        onClose();
+      } catch (err) {
+        setError(dutchError(err, 'Opslaan lukte niet.'));
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const batch = writeBatch(db);
       const col = collection(db, 'households', householdId, 'tasks');
@@ -386,28 +456,50 @@ function AddTaskModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Nieuwe taak</h3>
+        <h3 className="modal-title">{editing ? 'Taak bewerken' : 'Nieuwe taak'}</h3>
 
-        <div className="segmented" role="tablist">
-          <button
-            className={`segmented-item${kind === 'standard' ? ' active' : ''}`}
-            onClick={() => {
-              setKind('standard');
-              setError(null);
-            }}
-          >
-            Standaard taak
-          </button>
-          <button
-            className={`segmented-item${kind === 'custom' ? ' active' : ''}`}
-            onClick={() => {
-              setKind('custom');
-              setError(null);
-            }}
-          >
-            Eigen taak
-          </button>
-        </div>
+        {editing && partner && (
+          <div className="nudge-box">
+            <button
+              className="btn btn-secondary btn-block"
+              onClick={handleNudge}
+              disabled={nudgeState !== 'idle'}
+            >
+              {nudgeState === 'sent'
+                ? `✓ ${memberNames[partner] ?? 'Je partner'} is gepord`
+                : nudgeState === 'busy'
+                  ? 'Even geduld…'
+                  : `👉 Por ${memberNames[partner] ?? 'je partner'}`}
+            </button>
+            <p className="settings-note" style={{ margin: '6px 0 0' }}>
+              {nudgeError ??
+                `${memberNames[partner] ?? 'Je partner'} krijgt een melding: "Kun je dit doen? 🙏"`}
+            </p>
+          </div>
+        )}
+
+        {!editing && (
+          <div className="segmented" role="tablist">
+            <button
+              className={`segmented-item${kind === 'standard' ? ' active' : ''}`}
+              onClick={() => {
+                setKind('standard');
+                setError(null);
+              }}
+            >
+              Standaard taak
+            </button>
+            <button
+              className={`segmented-item${kind === 'custom' ? ' active' : ''}`}
+              onClick={() => {
+                setKind('custom');
+                setError(null);
+              }}
+            >
+              Eigen taak
+            </button>
+          </div>
+        )}
 
         {kind === 'standard' ? (
           <>
@@ -572,7 +664,7 @@ function AddTaskModal({
           disabled={busy}
           style={{ marginBottom: 8 }}
         >
-          {newTitles.length > 1 ? `${newTitles.length} taken toevoegen` : 'Taak toevoegen'}
+          {editing ? 'Opslaan' : newTitles.length > 1 ? `${newTitles.length} taken toevoegen` : 'Taak toevoegen'}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onClose}>
           Annuleren

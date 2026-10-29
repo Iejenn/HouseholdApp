@@ -480,6 +480,18 @@
   font-weight: 700;
 }
 
+.nudge-box {
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 18px;
+}
+
+.task-nudged {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
 /* ── Add-task modal: standard/custom toggle + room tiles ───── */
 
 .segmented {
@@ -818,6 +830,17 @@
 
 .swipe-bg.armed {
   background: var(--color-danger);
+}
+
+/* Swiping left: edit/poke action, shown on the right-hand side */
+.swipe-bg-left {
+  justify-content: flex-end;
+  padding-left: 0;
+  padding-right: 16px;
+}
+
+.swipe-bg-left.armed {
+  background: var(--color-sage);
 }
 
 .swipe-content {

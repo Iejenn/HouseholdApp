@@ -241,6 +241,50 @@ export const weeklySummary = onSchedule(
   }
 );
 
+// ── Poke your partner about a task ─────────────────────────────────
+
+const NUDGE_COOLDOWN_MS = 10 * 60 * 1000; // per task, so nobody gets spammed
+
+export const nudgeTask = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Log eerst in.');
+  const uid = request.auth.uid;
+  const { householdId, taskId } = request.data ?? {};
+  if (typeof householdId !== 'string' || typeof taskId !== 'string') {
+    throw new HttpsError('invalid-argument', 'Onbekende taak.');
+  }
+
+  const household = await db.collection('households').doc(householdId).get();
+  if (!(household.get('memberIds') ?? []).includes(uid)) {
+    throw new HttpsError('permission-denied', 'Je hoort niet bij dit huishouden.');
+  }
+  const taskRef = household.ref.collection('tasks').doc(taskId);
+  const task = await taskRef.get();
+  if (!task.exists) throw new HttpsError('not-found', 'Deze taak bestaat niet meer.');
+
+  const last = task.get('lastNudgedAt') ?? 0;
+  if (Date.now() - last < NUDGE_COOLDOWN_MS) {
+    throw new HttpsError('resource-exhausted', 'Er is net al gepord voor deze taak. Probeer het over een paar minuten weer.');
+  }
+
+  const to = await recipients(householdId, uid, 'nudge');
+  if (to.length === 0) return { ok: false, reason: 'no-recipient' };
+
+  const sender = await db.collection('users').doc(uid).get();
+  const name = sender.get('displayName') ?? 'Je partner';
+  await Promise.all(
+    to.map((other) =>
+      sendToUser(other, {
+        title: `👉 ${name} port je`,
+        body: shorten(`Kun je "${task.get('title')}" doen? 🙏`),
+        tab: 'tasks',
+        tag: `nudge-${taskId}`,
+      })
+    )
+  );
+  await taskRef.update({ lastNudgedAt: Date.now(), lastNudgedBy: uid });
+  return { ok: true };
+});
+
 // ── Test button in Instellingen ────────────────────────────────────
 
 export const sendTestPush = onCall(async (request) => {

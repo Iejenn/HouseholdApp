@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
 import CatScene from '../components/CatScene';
+import type { CatPose } from '../components/CatScene';
 import {
   HOUSE_LEVELS,
   REFILL_ALLOWED_BELOW,
@@ -61,6 +62,9 @@ function pickLine(mood: CatMood, sleeping: boolean, openTasks: Task[]): string {
   return GENERIC_LINES[Math.floor(Math.random() * GENERIC_LINES.length)];
 }
 
+const PLAY_LINES = ['Pak \'m! 🐾', 'Hebbes!', 'Nog een keer!', 'Kijk mij eens!', 'Wiebel wiebel…'];
+const pick = (lines: string[]) => lines[Math.floor(Math.random() * lines.length)];
+
 const SHOP_SECTIONS: { title: string; match: (i: ShopItem) => boolean }[] = [
   { title: 'Eten & snoep', match: (i) => i.kind === 'food' || i.kind === 'treat' },
   { title: 'Speelgoed & meubels', match: (i) => i.kind === 'permanent' },
@@ -79,6 +83,9 @@ export default function CatScreen() {
   const [busyItem, setBusyItem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openTasks, setOpenTasks] = useState<Task[]>([]);
+  const [pose, setPose] = useState<CatPose>('sit');
+  const [activeToy, setActiveToy] = useState<string | null>(null);
+  const poseTimer = useRef<number | null>(null);
   const now = useNow(30_000);
 
   // Open tasks, only so the cat can nag about them
@@ -93,6 +100,7 @@ export default function CatScreen() {
   useEffect(
     () => () => {
       if (speechTimer.current) window.clearTimeout(speechTimer.current);
+      if (poseTimer.current) window.clearTimeout(poseTimer.current);
     },
     []
   );
@@ -105,14 +113,66 @@ export default function CatScreen() {
   const sleeping = part === 'night';
   const next = HOUSE_LEVELS[level + 1];
 
-  function pet() {
-    // Purely for fun — petting is free and stored nowhere
-    setPetting(true);
-    window.setTimeout(() => setPetting(false), 1200);
-    setSpeech(pickLine(cat.mood, sleeping, openTasks));
+  function say(line: string) {
+    setSpeech(line);
     if (speechTimer.current) window.clearTimeout(speechTimer.current);
     speechTimer.current = window.setTimeout(() => setSpeech(null), 3500);
   }
+
+  // Do something for a while, then go back to sitting
+  function act(next: CatPose, ms: number, toy: string | null = null) {
+    if (poseTimer.current) window.clearTimeout(poseTimer.current);
+    setPose(next);
+    setActiveToy(toy);
+    poseTimer.current = window.setTimeout(() => {
+      setPose('sit');
+      setActiveToy(null);
+    }, ms);
+  }
+
+  function pet() {
+    // Purely for fun — petting is free and stored nowhere
+    if (!sleeping && pose !== 'sit') act('sit', 0); // tapping wakes him from a nap/game
+    setPetting(true);
+    window.setTimeout(() => setPetting(false), 1200);
+    say(pickLine(cat.mood, sleeping, openTasks));
+  }
+
+  function playWith(toy: string) {
+    if (sleeping) return say('Zzz… morgen spelen…');
+    if (cat.mood === 'hungry') return say('Eerst eten! 🥣');
+    act('play', 2800, toy);
+    say(pick(PLAY_LINES));
+  }
+
+  function napInBed() {
+    if (sleeping) return say('Zzz…');
+    act('lie', 20_000);
+    say('Even een dutje in mijn mand… 😌');
+  }
+
+  function checkBowl() {
+    if (sleeping) return say('Zzz…');
+    if (cat.fullness > 0) {
+      act('groom', 3000);
+      say('Mmm, smikkelen! 😋');
+    } else {
+      say('Leeg… 😿 Vul je hem?');
+    }
+  }
+
+  // Now and then he does something by himself: a wash or a little lie-down
+  const idleState = useRef({ sleeping, pose, hungry: cat.mood === 'hungry' });
+  idleState.current = { sleeping, pose, hungry: cat.mood === 'hungry' };
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const st = idleState.current;
+      if (st.sleeping || st.hungry || st.pose !== 'sit' || Math.random() > 0.35) return;
+      if (Math.random() < 0.6) act('groom', 3500);
+      else act('lie', 25_000);
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function rename() {
     const nextName = window.prompt('Hoe heet jullie kat?', name)?.trim();
@@ -184,6 +244,12 @@ export default function CatScreen() {
             <CatScene
               mood={petting && !sleeping ? 'happy' : cat.mood}
               sleeping={sleeping}
+              // At night he sleeps curled up in a ball
+              pose={sleeping ? 'lie' : pose}
+              activeToy={activeToy}
+              onToy={playWith}
+              onBed={napInBed}
+              onBowl={checkBowl}
               fullness={cat.fullness}
               owned={cat.owned}
               look={look}
@@ -203,7 +269,7 @@ export default function CatScreen() {
             )}
           </div>
           <p className="cat-mood">{moodText(cat.mood, name, sleeping)}</p>
-          <p className="cat-hint">Tik op {name} om te aaien</p>
+          <p className="cat-hint">Tik op {name}, zijn speeltjes, mand of voerbak</p>
 
           <StatBar label="Voerbak" emoji="🥣" value={cat.fullness} warn={cat.fullness < 25} />
           <StatBar label="Geluk" emoji="💛" value={cat.happiness} warn={cat.happiness < 40} />

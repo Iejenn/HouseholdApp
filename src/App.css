@@ -669,6 +669,67 @@
   50% { transform: translateY(-3px); }
 }
 
+/* Poses + toy reactions */
+.cat-tail-fast {
+  animation-duration: 0.8s;
+}
+
+.cat-bat {
+  transform-box: fill-box;
+  transform-origin: 0% 0%;
+  animation: cat-bat 0.32s ease-in-out infinite alternate;
+}
+
+@keyframes cat-bat {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(8deg); }
+}
+
+.cat-groom-paw {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: cat-groom 0.45s ease-in-out infinite alternate;
+}
+
+@keyframes cat-groom {
+  from { transform: translateY(0); }
+  to { transform: translateY(5px) rotate(-4deg); }
+}
+
+.toy-roll {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: toy-roll 1.4s ease-in-out;
+}
+
+@keyframes toy-roll {
+  0% { transform: translateX(0) rotate(0deg); }
+  40% { transform: translateX(18px) rotate(200deg); }
+  100% { transform: translateX(0) rotate(360deg); }
+}
+
+.toy-scurry {
+  animation: toy-scurry 1.2s ease-in-out;
+}
+
+@keyframes toy-scurry {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-8px, -3px); }
+  45% { transform: translate(10px, 0); }
+  70% { transform: translate(-4px, -2px); }
+}
+
+.toy-sway .toy-lure {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+  animation: toy-sway 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes toy-sway {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(14deg); }
+}
+
 .cat-speech {
   position: absolute;
   top: 8px;

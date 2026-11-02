@@ -1,5 +1,18 @@
 import type { CatLook, CatMood, DayPart, Season } from '../data/catShop';
 
+// What the cat is doing right now (decided in CatScreen)
+export type CatPose = 'sit' | 'groom' | 'play' | 'lie';
+
+// Amber eyes, like the real one
+const EYE = '#e3b23c';
+
+// Where each toy is, so the cat can turn/shuffle towards it to play
+export const TOY_SPOTS: Record<string, { side: 'left' | 'right'; shift: number }> = {
+  toy_mouse: { side: 'left', shift: 0 },
+  toy_yarn: { side: 'right', shift: 0 },
+  toy_rod: { side: 'right', shift: 80 },
+};
+
 const WALL_FILLS: Record<string, string> = {
   wall_mint: '#d9eadf',
   wall_stripes: 'url(#wall-stripes)',
@@ -34,7 +47,17 @@ export default function CatScene({
   season,
   petting,
   onPet,
+  pose = 'sit',
+  activeToy = null,
+  onToy,
+  onBed,
+  onBowl,
 }: {
+  pose?: CatPose;
+  activeToy?: string | null;
+  onToy?: (id: string) => void;
+  onBed?: () => void;
+  onBowl?: () => void;
   mood: CatMood;
   sleeping: boolean;
   fullness: number;
@@ -59,6 +82,13 @@ export default function CatScene({
   // In December he gets a Santa hat, unless he's already wearing one
   const hat = look.hat ?? (season === 'christmas' ? 'santa' : null);
   const lampOn = dayPart !== 'day';
+  const spot = activeToy ? TOY_SPOTS[activeToy] : undefined;
+  const shiftX = pose === 'play' && spot ? spot.shift : 0;
+  const toyProps = (id: string, anim: string) => ({
+    className: `toy${activeToy === id ? ` ${anim}` : ''}`,
+    onClick: () => onToy?.(id),
+    style: { cursor: 'pointer' },
+  });
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="cat-scene" role="img" aria-label="Jullie kat in zijn huisje">
@@ -93,14 +123,14 @@ export default function CatScene({
 
         {/* Bed */}
         {hasBed && (
-          <g>
+          <g onClick={onBed} style={{ cursor: 'pointer' }}>
             <ellipse cx="180" cy="206" rx="86" ry="22" fill="#b5653f" />
             <ellipse cx="180" cy="202" rx="72" ry="14" fill="var(--color-primary-tint)" />
           </g>
         )}
 
         {/* Food bowl — the kibble shrinks as the cat gets hungrier */}
-        <g>
+        <g onClick={onBowl} style={{ cursor: 'pointer' }}>
           {fill > 0 && <ellipse cx="300" cy="206" rx={6 + 18 * fill} ry={2 + 7 * fill} fill="#8a5a33" />}
           {fill > 0.4 && (
             <>
@@ -115,14 +145,14 @@ export default function CatScene({
 
         {/* Toys */}
         {owned.has('toy_yarn') && (
-          <g>
+          <g {...toyProps('toy_yarn', 'toy-roll')}>
             <circle cx="250" cy="226" r="10" fill="#c96a7a" />
             <path d="M242 222 q8 -6 16 2 M241 228 q9 -4 18 2 M246 218 q4 8 10 16" stroke="#a8505f" strokeWidth="1.5" fill="none" />
             <path d="M240 228 q-12 6 -24 0" stroke="#c96a7a" strokeWidth="1.5" fill="none" />
           </g>
         )}
         {owned.has('toy_mouse') && (
-          <g>
+          <g {...toyProps('toy_mouse', 'toy-scurry')}>
             <ellipse cx="110" cy="228" rx="12" ry="7" fill="#9aa0a6" />
             <circle cx="100" cy="222" r="4" fill="#b7bcc1" />
             <circle cx="99" cy="226" r="1.3" fill="#333" />
@@ -130,29 +160,44 @@ export default function CatScene({
           </g>
         )}
         {owned.has('toy_rod') && (
-          <g>
+          <g {...toyProps('toy_rod', 'toy-sway')}>
             <line x1="330" y1="236" x2="350" y2="130" stroke="#7a5233" strokeWidth="3" strokeLinecap="round" />
-            <path d="M350 130 q-10 30 -4 56" stroke="#bbb" strokeWidth="1" fill="none" />
-            <path d="M346 186 q-10 6 -6 16 q8 -4 6 -16" fill="#6fa6b8" />
-            <path d="M346 186 q8 4 6 14 q-8 -2 -6 -14" fill="#e3b04b" />
+            <g className="toy-lure">
+              <path d="M350 130 q-10 30 -4 56" stroke="#bbb" strokeWidth="1" fill="none" />
+              <path d="M346 186 q-10 6 -6 16 q8 -4 6 -16" fill="#6fa6b8" />
+              <path d="M346 186 q8 4 6 14 q-8 -2 -6 -14" fill="#e3b04b" />
+            </g>
           </g>
         )}
 
         {season === 'christmas' && <ChristmasTree />}
         {season === 'halloween' && <Pumpkin />}
 
-        {/* The cat */}
-        <g
-          transform={`translate(95 ${catY}) scale(0.85)`}
-          className={`cat${petting ? ' cat-petting' : ''}`}
-          onClick={onPet}
-          style={{ cursor: 'pointer' }}
-        >
-          <Cat mood={mood} sleeping={sleeping} collar={look.collar ?? null} hat={hat} />
+        {/* The cat — the outer group slides him towards a toy */}
+        <g style={{ transform: `translateX(${shiftX}px)`, transition: 'transform 0.6s ease' }}>
+          <g
+            transform={`translate(95 ${catY}) scale(0.85)`}
+            className={`cat${petting ? ' cat-petting' : ''}`}
+            onClick={onPet}
+            style={{ cursor: 'pointer' }}
+          >
+            {pose === 'lie' ? (
+              <CatLying sleeping={sleeping} hat={hat} />
+            ) : (
+              <Cat
+                mood={mood}
+                sleeping={sleeping}
+                collar={look.collar ?? null}
+                hat={hat}
+                variant={pose}
+                side={spot?.side ?? 'right'}
+              />
+            )}
+          </g>
         </g>
 
         {/* Thought bubble when hungry (and awake) */}
-        {mood === 'hungry' && !sleeping && (
+        {mood === 'hungry' && !sleeping && pose === 'sit' && (
           <g className="cat-thought">
             <circle cx="226" cy="64" r="4" fill="#fff" />
             <circle cx="236" cy="50" r="6" fill="#fff" />
@@ -162,9 +207,19 @@ export default function CatScene({
         )}
         {sleeping && (
           <g className="cat-zzz" fill="#fff" stroke="#2c3352" strokeWidth="0.6" fontWeight="700">
-            <text x="236" y="58" fontSize="14">z</text>
-            <text x="248" y="42" fontSize="18">z</text>
-            <text x="262" y="24" fontSize="22">Z</text>
+            {pose === 'lie' ? (
+              <>
+                <text x="150" y={catY + 112} fontSize="14">z</text>
+                <text x="136" y={catY + 94} fontSize="18">z</text>
+                <text x="118" y={catY + 72} fontSize="22">Z</text>
+              </>
+            ) : (
+              <>
+                <text x="236" y="58" fontSize="14">z</text>
+                <text x="248" y="42" fontSize="18">z</text>
+                <text x="262" y="24" fontSize="22">Z</text>
+              </>
+            )}
           </g>
         )}
       </g>
@@ -422,18 +477,27 @@ function Cat({
   sleeping,
   collar,
   hat,
+  variant = 'sit',
+  side = 'right',
 }: {
   mood: CatMood;
   sleeping: boolean;
   collar: string | null;
   hat: string | null;
+  variant?: 'sit' | 'groom' | 'play';
+  side?: 'left' | 'right';
 }) {
-  const happyEyes = mood === 'happy' && !sleeping;
+  const grooming = variant === 'groom';
+  const playing = variant === 'play';
+  // Grooming: eyes shut in bliss; playing: wide, focused eyes
+  const happyEyes = (mood === 'happy' && !sleeping) || grooming;
+  // Head turns a little towards whatever he's busy with
+  const headTilt = grooming ? -10 : playing ? (side === 'right' ? 8 : -8) : 0;
   return (
     <>
       {/* Tail */}
       <path
-        className="cat-tail"
+        className={`cat-tail${playing ? ' cat-tail-fast' : ''}`}
         d="M140 196 C 185 196, 200 160, 182 128 C 176 118, 166 124, 172 134 C 184 156, 172 182, 136 184 Z"
         fill="#1d1b1a"
       />
@@ -444,8 +508,18 @@ function Cat({
         <ellipse cx="80" cy="207" rx="15" ry="9" fill="#fbfaf7" />
         <ellipse cx="120" cy="207" rx="15" ry="9" fill="#fbfaf7" />
       </g>
+      {/* Playing: one leg reaches out to bat at the toy (mirrored for the left) */}
+      {playing && (
+        <g transform={side === 'left' ? 'translate(200 0) scale(-1 1)' : undefined}>
+          <g className="cat-bat">
+            <path d="M128 158 C 160 160, 176 190, 180 210" stroke="#1d1b1a" strokeWidth="17" fill="none" strokeLinecap="round" />
+            <ellipse cx="182" cy="212" rx="12" ry="8" fill="#fbfaf7" />
+          </g>
+        </g>
+      )}
+
       {/* Head */}
-      <g className="cat-head">
+      <g className="cat-head" transform={headTilt ? `rotate(${headTilt} 100 130)` : undefined}>
         <path d="M58 70 L 56 22 L 92 50 Z" fill="#1d1b1a" />
         <path d="M142 70 L 144 22 L 108 50 Z" fill="#1d1b1a" />
         <path d="M64 58 L 62 34 L 82 50 Z" fill="#e8a3ad" />
@@ -467,10 +541,10 @@ function Cat({
           </>
         ) : (
           <g className="cat-eyes">
-            <ellipse cx="81" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill="#c9d64f" />
-            <ellipse cx="119" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill="#c9d64f" />
-            <ellipse cx="81" cy="86" rx="3" ry={mood === 'hungry' ? 8 : 6} fill="#111" />
-            <ellipse cx="119" cy="86" rx="3" ry={mood === 'hungry' ? 8 : 6} fill="#111" />
+            <ellipse cx="81" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill={EYE} />
+            <ellipse cx="119" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill={EYE} />
+            <ellipse cx="81" cy="86" rx={playing ? 6 : 3} ry={mood === 'hungry' || playing ? 8 : 6} fill="#111" />
+            <ellipse cx="119" cy="86" rx={playing ? 6 : 3} ry={mood === 'hungry' || playing ? 8 : 6} fill="#111" />
             <circle cx="84" cy="82" r="2" fill="#fff" />
             <circle cx="122" cy="82" r="2" fill="#fff" />
             {mood === 'bored' && (
@@ -518,10 +592,72 @@ function Cat({
         </g>
 
         {hat && <Hat id={hat} />}
+        {grooming && <ellipse cx="104" cy="117" rx="4" ry="3.5" fill="#e07a8a" />}
       </g>
 
       {collar && <Collar id={collar} />}
+
+      {/* Grooming: a white paw raised to the mouth, licked up and down */}
+      {grooming && (
+        <g className="cat-groom-paw">
+          <path d="M118 178 C 130 160, 126 136, 112 124" stroke="#1d1b1a" strokeWidth="18" fill="none" strokeLinecap="round" />
+          <ellipse cx="108" cy="121" rx="12" ry="9" fill="#fbfaf7" stroke="#cfc6ba" strokeWidth="2" />
+          <path d="M102 116 v6 M108 115 v7 M114 116 v6" stroke="#e3dbd0" strokeWidth="1.5" strokeLinecap="round" />
+        </g>
+      )}
     </>
+  );
+}
+
+// Curled up in a ball with the paws tucked under the chin — his favourite
+// way to nap. Drawn in the same 200×220 box as the sitting cat.
+function CatLying({ sleeping, hat }: { sleeping: boolean; hat: string | null }) {
+  return (
+    <g className="cat-lying">
+      <g className="cat-body">
+        <ellipse cx="118" cy="180" rx="74" ry="40" fill="#1d1b1a" />
+        {/* Tail wrapped around the front */}
+        <path d="M188 186 C 204 214, 128 228, 66 216 C 54 214, 56 205, 66 206 C 116 213, 172 206, 172 190 Z" fill="#1d1b1a" />
+        <ellipse cx="76" cy="196" rx="20" ry="12" fill="#fbfaf7" />
+        <ellipse cx="58" cy="207" rx="13" ry="7" fill="#fbfaf7" />
+        <ellipse cx="82" cy="210" rx="13" ry="7" fill="#fbfaf7" />
+      </g>
+      <g className="cat-head">
+        <path d="M32 150 L24 114 L54 134 Z" fill="#1d1b1a" />
+        <path d="M74 134 L96 110 L94 146 Z" fill="#1d1b1a" />
+        <path d="M34 142 L30 122 L48 134 Z" fill="#e8a3ad" />
+        <path d="M78 134 L92 118 L90 140 Z" fill="#e8a3ad" />
+        <circle cx="60" cy="164" r="36" fill="#1d1b1a" />
+        <path d="M60 144 C 56 156, 48 168, 40 174 C 44 192, 78 192, 82 174 C 72 168, 64 156, 60 144 Z" fill="#fbfaf7" />
+        {sleeping ? (
+          <>
+            <path d="M40 162 q8 6 15 0" stroke="#f3e9c6" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d="M66 162 q8 6 15 0" stroke="#f3e9c6" strokeWidth="3" fill="none" strokeLinecap="round" />
+          </>
+        ) : (
+          <>
+            {/* Lazy half-open eyes */}
+            <ellipse cx="47" cy="163" rx="7" ry="5" fill={EYE} />
+            <ellipse cx="73" cy="163" rx="7" ry="5" fill={EYE} />
+            <ellipse cx="47" cy="164" rx="2.2" ry="4" fill="#111" />
+            <ellipse cx="73" cy="164" rx="2.2" ry="4" fill="#111" />
+            <rect x="38" y="155" width="18" height="5" fill="#1d1b1a" />
+            <rect x="64" y="155" width="18" height="5" fill="#1d1b1a" />
+          </>
+        )}
+        <path d="M56 175 h8 l-4 5 z" fill="#d9808d" />
+        <g stroke="#c9c4bb" strokeWidth="1.3" strokeLinecap="round">
+          <line x1="44" y1="180" x2="16" y2="174" />
+          <line x1="44" y1="183" x2="16" y2="186" />
+          <line x1="76" y1="180" x2="104" y2="174" />
+        </g>
+        {hat && (
+          <g transform="translate(-15 96) scale(0.75)">
+            <Hat id={hat} />
+          </g>
+        )}
+      </g>
+    </g>
   );
 }
 

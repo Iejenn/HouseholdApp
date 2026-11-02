@@ -76,6 +76,16 @@ export async function disablePush(uid: string): Promise<void> {
   if (await isSupported()) await deleteToken(getMessaging(app)).catch(() => {});
 }
 
+// Asks the server to send the partner a "can you do this?" notification.
+// Returns false when nobody can receive it (no partner, or they turned pokes off).
+export async function nudgeTask(householdId: string, taskId: string): Promise<boolean> {
+  const res = await httpsCallable<{ householdId: string; taskId: string }, { ok: boolean }>(
+    getFunctions(app, 'europe-west1'),
+    'nudgeTask'
+  )({ householdId, taskId });
+  return res.data.ok;
+}
+
 export async function sendTestPush(): Promise<void> {
   await httpsCallable(getFunctions(app, 'europe-west1'), 'sendTestPush')();
 }

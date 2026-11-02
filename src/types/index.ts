@@ -11,6 +11,7 @@ export interface NotifyPrefs {
   groceries?: boolean;
   daily?: boolean;
   weekly?: boolean;
+  nudge?: boolean;
 }
 export interface Household {
   id: string;
@@ -49,6 +50,9 @@ export interface Task {
   // "laatst gedaan" instead of resetting it to "nog nooit"
   previousCompletedAt?: number | null;
   previousCompletedBy?: string | null;
+  // Last time someone poked the other about this task (set by the server)
+  lastNudgedAt?: number;
+  lastNudgedBy?: string;
 }
 // One doc per check-off in households/{id}/completions. Each one earns the
 // household points to spend on the cat. Doc id is `${taskId}_${completedAt}`

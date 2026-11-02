@@ -3,17 +3,22 @@ import type { PointerEvent, ReactNode } from 'react';
 
 // Past this many pixels a drag counts as a swipe, not a tap
 const DRAG_START_PX = 8;
-// Release beyond this share of the row width (or this many px) to delete
-const DELETE_AT_FRACTION = 0.35;
-const DELETE_AT_MAX_PX = 140;
+// Release beyond this share of the row width (or this many px) to act
+const ACT_AT_FRACTION = 0.35;
+const ACT_AT_MAX_PX = 140;
 
-// Swipe the row to the right to delete it. Vertical movement is left to the
-// browser (touch-action: pan-y), so scrolling the list still works normally.
+// Swipe the row to the right to delete it, and (optionally) to the left for
+// a second action such as editing. Vertical movement is left to the browser
+// (touch-action: pan-y), so scrolling the list still works normally.
 export default function SwipeToDelete({
   onDelete,
+  onSwipeLeft,
+  leftLabel = '✏️ Bewerken',
   children,
 }: {
   onDelete: () => void;
+  onSwipeLeft?: () => void;
+  leftLabel?: string;
   children: ReactNode;
 }) {
   const [dx, setDx] = useState(0);
@@ -25,7 +30,7 @@ export default function SwipeToDelete({
 
   function threshold() {
     const width = rowRef.current?.offsetWidth ?? 300;
-    return Math.min(width * DELETE_AT_FRACTION, DELETE_AT_MAX_PX);
+    return Math.min(width * ACT_AT_FRACTION, ACT_AT_MAX_PX);
   }
 
   function onPointerDown(e: PointerEvent) {
@@ -45,12 +50,13 @@ export default function SwipeToDelete({
         start.current = null;
         return;
       }
-      if (moveX < DRAG_START_PX) return;
+      const leftAllowed = !!onSwipeLeft;
+      if (moveX < DRAG_START_PX && !(leftAllowed && moveX < -DRAG_START_PX)) return;
       didDrag.current = true;
       setDragging(true);
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     }
-    setDx(Math.max(0, moveX));
+    setDx(onSwipeLeft ? moveX : Math.max(0, moveX));
   }
 
   function onPointerEnd() {
@@ -63,18 +69,21 @@ export default function SwipeToDelete({
       setLeaving(true);
       setDx(rowRef.current?.offsetWidth ?? 400);
       window.setTimeout(onDelete, 180);
+    } else if (onSwipeLeft && dx <= -threshold()) {
+      // The row stays: snap back and open the other action
+      setDx(0);
+      onSwipeLeft();
     } else {
       setDx(0);
     }
   }
 
-  const armed = dx >= threshold();
+  const armed = Math.abs(dx) >= threshold();
 
   return (
     <div className="swipe-wrap" ref={rowRef}>
-      <div className={`swipe-bg${armed ? ' armed' : ''}`} style={{ opacity: dx > 0 ? 1 : 0 }}>
-        🗑️ Verwijderen
-      </div>
+      {dx > 0 && <div className={`swipe-bg${armed ? ' armed' : ''}`}>🗑️ Verwijderen</div>}
+      {dx < 0 && <div className={`swipe-bg swipe-bg-left${armed ? ' armed' : ''}`}>{leftLabel}</div>}
       <div
         className="swipe-content"
         style={{

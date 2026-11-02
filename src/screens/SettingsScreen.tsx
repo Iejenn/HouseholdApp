@@ -11,6 +11,7 @@ import type { NotifyPrefs } from '../types';
 const PREFS: { key: keyof NotifyPrefs; label: string; description: string }[] = [
   { key: 'chat', label: 'Chatberichten', description: 'Als je partner iets stuurt' },
   { key: 'groceries', label: 'Boodschappen', description: 'Als je partner iets op de lijst zet' },
+  { key: 'nudge', label: 'Porren', description: 'Als je partner je vraagt een taak te doen' },
   { key: 'daily', label: 'Dagelijkse herinnering', description: 'Om 8:30 als er taken te laat zijn of de kat honger heeft' },
   { key: 'weekly', label: 'Weekoverzicht', description: 'Maandag om 9:00: wie deed wat, en welke ruimte de meeste aandacht kreeg' },
 ];

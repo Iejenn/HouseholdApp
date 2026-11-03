@@ -3,13 +3,14 @@ import { arrayRemove, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
+import WeatherLocationPicker from '../components/WeatherLocationPicker';
 import { disablePush, enablePush, pushStatus, sendTestPush } from '../lib/push';
 import type { PushStatus } from '../lib/push';
 import { dutchError } from '../lib/firebaseErrors';
 import type { NotifyPrefs } from '../types';
 
 const PREFS: { key: keyof NotifyPrefs; label: string; description: string }[] = [
-  { key: 'chat', label: 'Chatberichten', description: 'Als je partner iets stuurt' },
+  { key: 'chat', label: 'Briefjes op het prikbord', description: 'Als je partner een post-it plakt' },
   { key: 'groceries', label: 'Boodschappen', description: 'Als je partner iets op de lijst zet' },
   { key: 'nudge', label: 'Porren', description: 'Als je partner je vraagt een taak te doen' },
   { key: 'daily', label: 'Dagelijkse herinnering', description: 'Om 8:30 als er taken te laat zijn of de kat honger heeft' },
@@ -142,6 +143,11 @@ export default function SettingsScreen() {
               {message.text}
             </p>
           )}
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <p className="card-title">🌤️ Weer op het startscherm</p>
+          <WeatherLocationPicker />
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>

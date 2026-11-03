@@ -19,6 +19,7 @@ import SwipeToDelete from '../components/SwipeToDelete';
 import UndoToast from '../components/UndoToast';
 import { isHiddenDone } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
+import RecipesScreen from './RecipesScreen';
 import type { GroceryItem } from '../types';
 
 export default function GroceriesScreen() {
@@ -27,6 +28,7 @@ export default function GroceriesScreen() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showRecipes, setShowRecipes] = useState(false);
   const now = useNow();
 
   useEffect(() => {
@@ -108,6 +110,8 @@ export default function GroceriesScreen() {
     .slice(0, 8)
     .map(([, e]) => e.label);
 
+  if (showRecipes) return <RecipesScreen onClose={() => setShowRecipes(false)} />;
+
   return (
     <>
       <div className="app-header">
@@ -119,6 +123,9 @@ export default function GroceriesScreen() {
               : `${open.length} ${open.length === 1 ? 'ding' : 'dingen'} te halen`}
           </p>
         </div>
+        <button className="btn btn-ghost header-btn" onClick={() => setShowRecipes(true)}>
+          📖 Gerechten
+        </button>
       </div>
 
       <form className="grocery-add" onSubmit={handleAdd}>

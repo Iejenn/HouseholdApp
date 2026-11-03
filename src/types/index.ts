@@ -86,3 +86,19 @@ export interface ChatMessage {
   text: string;
   createdAt: number;
 }
+// Recipe library (Gerechten) in households/{id}/recipes
+export interface Recipe {
+  id: string;
+  name: string;
+  ingredients: string[];
+  createdAt: number;
+  createdBy: string;
+}
+export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+// households/{id}/weekMenus/{weekId}, weekId like "2026-KW45".
+// Per day: a recipe id, null = deliberately nothing, missing = default
+// (Friday's default is patat).
+export interface WeekMenu {
+  days: Partial<Record<DayKey, string | null>>;
+  updatedAt: number;
+}

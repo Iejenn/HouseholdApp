@@ -172,12 +172,31 @@ function nextDueDay(day, { unit, interval }) {
 }
 
 function isLate(task, today) {
-  if (!task.isRecurring || !task.recurrence || !task.completedAt) return false;
+  // One-off task with a deadline: late once that day is over
+  if (!task.isRecurring) return !task.completedAt && task.dueAt != null && today > dayNumber(task.dueAt);
+  if (!task.recurrence || !task.completedAt) return false;
   const due = nextDueDay(dayNumber(task.completedAt), task.recurrence);
   return today >= nextDueDay(due, task.recurrence);
 }
 
 const FOOD_LASTS_MS = 48 * 60 * 60 * 1000;
+
+// Vacation mode (same as src/lib/vacation.ts): the last period has no end yet
+function onVacation(household) {
+  const last = (household.get('vacations') ?? []).at(-1);
+  return !!last && last.to == null;
+}
+
+// Time spent on vacation doesn't count for the food bowl (src/data/catShop.ts)
+function pausedMs(from, to, periods) {
+  let total = 0;
+  for (const p of periods) {
+    const start = Math.max(from, p.from);
+    const end = Math.min(to, p.to ?? to);
+    if (end > start) total += end - start;
+  }
+  return total;
+}
 const HUNGRY_BELOW = 25; // percent, same as the app
 
 export const dailyReminder = onSchedule(
@@ -188,17 +207,25 @@ export const dailyReminder = onSchedule(
     const households = await db.collection('households').get();
 
     for (const household of households.docs) {
+      if (onVacation(household)) continue; // no nagging on holiday
       const [tasks, food] = await Promise.all([
         household.ref.collection('tasks').get(),
         household.ref.collection('purchases').where('item', '==', 'food').get(),
       ]);
 
       const lateCount = tasks.docs.filter((t) => isLate(t.data(), today)).length;
+      // One-off tasks whose deadline is today
+      const dueToday = tasks.docs
+        .map((t) => t.data())
+        .filter((t) => !t.isRecurring && !t.completedAt && t.dueAt != null && dayNumber(t.dueAt) === today);
       const lastFood = Math.max(0, ...food.docs.map((p) => p.get('createdAt') ?? 0));
-      const fullness = lastFood ? 100 * (1 - (now - lastFood) / FOOD_LASTS_MS) : 0;
+      const paused = pausedMs(lastFood, now, household.get('vacations') ?? []);
+      const fullness = lastFood ? 100 * (1 - (now - lastFood - paused) / FOOD_LASTS_MS) : 0;
       const catName = household.get('catName')?.trim() || 'Poes';
 
       const parts = [];
+      if (dueToday.length === 1) parts.push(`"${shorten(String(dueToday[0].title), 40)}" moet vandaag`);
+      if (dueToday.length > 1) parts.push(`${dueToday.length} taken moeten vandaag`);
       if (lateCount > 0) parts.push(`${lateCount} ${lateCount === 1 ? 'taak is' : 'taken zijn'} te laat`);
       if (fullness < HUNGRY_BELOW) parts.push(`${catName} heeft honger 🥣`);
       if (parts.length === 0) continue; // nothing to nag about today
@@ -209,7 +236,7 @@ export const dailyReminder = onSchedule(
           sendToUser(uid, {
             title: '☀️ Goedemorgen!',
             body: parts.join(' · '),
-            tab: lateCount > 0 ? 'tasks' : 'cat',
+            tab: lateCount > 0 || dueToday.length > 0 ? 'tasks' : 'cat',
             tag: 'daily',
           })
         )
@@ -241,6 +268,7 @@ export const weeklySummary = onSchedule(
     const households = await db.collection('households').get();
 
     for (const household of households.docs) {
+      if (onVacation(household)) continue; // no summary on holiday
       const [completions, tasks] = await Promise.all([
         household.ref.collection('completions').where('completedAt', '>=', since).get(),
         household.ref.collection('tasks').get(),

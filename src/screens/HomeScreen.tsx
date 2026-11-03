@@ -24,7 +24,10 @@ import { describeWeather, fetchForecast } from '../lib/weather';
 import type { Forecast } from '../lib/weather';
 import { resolveDay } from '../lib/menu';
 import { DAY_KEYS, weekId } from '../lib/week';
-import { isTaskDone, isTaskLate } from '../lib/time';
+import { byDeadline, formatDeadline, isTaskDone, isTaskLate } from '../lib/time';
+import { activeVacation, setVacation } from '../lib/vacation';
+import { useUndoCheck } from '../hooks/useUndoCheck';
+import UndoToast from '../components/UndoToast';
 import { toggleTaskDone } from '../lib/tasks';
 import { dutchError } from '../lib/firebaseErrors';
 import { fetchEvents } from '../lib/calendar';
@@ -75,7 +78,7 @@ function tilt(id: string): number {
 // Home: today at a glance plus the post-it board (which replaces the chat)
 export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget) => void }) {
   const { user, profile } = useAuth();
-  const { householdId, household, purchases } = useHousehold();
+  const { householdId, household, purchases, memberNames } = useHousehold();
   const recipes = useRecipes(householdId);
   const now = useNow();
   const today = new Date(now);
@@ -89,6 +92,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
   const [weatherError, setWeatherError] = useState(false);
   const [pickingPlace, setPickingPlace] = useState(false);
   const [agenda, setAgenda] = useState<{ linked: number; events: CalendarEvent[] } | null>(null);
+  const undoCheck = useUndoCheck(tasks, householdId, user?.uid);
+  const vacation = activeVacation(household);
 
   useEffect(() => {
     const unsubs = [
@@ -162,18 +167,20 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
   const lateCount = openTasks.filter((t) => isTaskLate(t, now)).length;
   // Late first, then one-off tasks (loose jobs like "Oma bellen" that are easy
   // to forget), then the ones assigned to you, then the rest. Oldest first
-  // within each group, so the order no longer jumps around.
+  // within each group, so the order no longer jumps around. One-off tasks
+  // with the nearest deadline come first.
   const topTasks = [...openTasks]
     .sort(
       (a, b) =>
         Number(isTaskLate(b, now)) - Number(isTaskLate(a, now)) ||
         Number(!b.isRecurring) - Number(!a.isRecurring) ||
+        byDeadline(a, b) ||
         Number(b.assignedTo === user?.uid) - Number(a.assignedTo === user?.uid) ||
         (a.createdAt ?? 0) - (b.createdAt ?? 0)
     )
     .slice(0, 3);
   const openGroceries = groceries.filter((g) => !g.checkedAt).sort((a, b) => b.createdAt - a.createdAt);
-  const cat = computeCat(purchases, now);
+  const cat = computeCat(purchases, now, household?.vacations);
   const catName = household?.catName?.trim() || 'Poes';
   const todayWeather = forecast ? describeWeather(forecast.currentCode) : null;
 
@@ -193,6 +200,21 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
       </div>
 
       <div className="app-content">
+        {/* Vacation mode: one tap to switch it off when you're back */}
+        {vacation && (
+          <div className="vacation-bar">
+            <span>
+              🏖️ Vakantiemodus staat aan
+              <span className="vacation-sub">
+                sinds {new Date(vacation.from).getDate()} {MONTHS[new Date(vacation.from).getMonth()]} ·{' '}
+                {memberNames[vacation.by] ?? '…'}
+              </span>
+            </span>
+            <button className="btn btn-primary" onClick={() => user && setVacation(householdId, user.uid, false)}>
+              Ik ben thuis
+            </button>
+          </div>
+        )}
         {/* Two columns on tablet/desktop: overview left, post-it board right */}
         <div className="home-layout">
           <div className="home-main">
@@ -272,11 +294,16 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
                 topTasks.map((t) => {
                   const late = isTaskLate(t, now);
                   const group = findTaskGroup(t.category);
+                  const deadline = !t.isRecurring && t.dueAt != null ? formatDeadline(t.dueAt, now) : null;
                   return (
                     <div key={t.id} className={`task-row${late ? ' late' : ''}`}>
                       <button
                         className="task-checkbox"
-                        onClick={() => user && toggleTaskDone(householdId, user.uid, t)}
+                        onClick={() => {
+                          if (!user) return;
+                          undoCheck.checked(t);
+                          toggleTaskDone(householdId, user.uid, t);
+                        }}
                         aria-label="Markeer als gedaan"
                       />
                       <div className="task-info">
@@ -284,7 +311,11 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
                           {group && <span className="task-emoji">{group.emoji}</span>}
                           {t.title}
                         </p>
-                        {late && <p className="task-meta task-late-text">te laat</p>}
+                        {deadline ? (
+                          <p className={`task-meta deadline-${deadline.tone}`}>📅 {deadline.text}</p>
+                        ) : (
+                          late && <p className="task-meta task-late-text">te laat</p>
+                        )}
                       </div>
                     </div>
                   );
@@ -336,6 +367,9 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
       </div>
 
       {writing && <NoteComposer onClose={() => setWriting(false)} />}
+      {undoCheck.pending && (
+        <UndoToast label={undoCheck.pending.title} action="afgevinkt" onUndo={undoCheck.undo} />
+      )}
     </>
   );
 }

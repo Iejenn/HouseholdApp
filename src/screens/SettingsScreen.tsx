@@ -8,6 +8,7 @@ import CalendarSettings from '../components/CalendarSettings';
 import { disablePush, enablePush, pushStatus, sendTestPush } from '../lib/push';
 import type { PushStatus } from '../lib/push';
 import { dutchError } from '../lib/firebaseErrors';
+import { activeVacation, setVacation } from '../lib/vacation';
 import type { NotifyPrefs } from '../types';
 
 const PREFS: { key: keyof NotifyPrefs; label: string; description: string }[] = [
@@ -22,6 +23,18 @@ export default function SettingsScreen() {
   const { user, profile, signOut } = useAuth();
   const { householdId, household, memberNames } = useHousehold();
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const vacation = activeVacation(household);
+  const [vacationError, setVacationError] = useState<string | null>(null);
+
+  async function toggleVacation(on: boolean) {
+    if (!user) return;
+    setVacationError(null);
+    try {
+      await setVacation(householdId, user.uid, on);
+    } catch (err) {
+      setVacationError(dutchError(err, 'Vakantiemodus wijzigen lukte niet.'));
+    }
+  }
 
   // Takes someone off the member list. Their phone notices and goes back to
   // the create/join screen; the household and all its data stay with you.
@@ -154,6 +167,32 @@ export default function SettingsScreen() {
         <div className="card" style={{ marginBottom: 16 }}>
           <p className="card-title">🌤️ Weer op het startscherm</p>
           <WeatherLocationPicker />
+        </div>
+
+        {/* For the whole household: no reminders, and the cat doesn't get
+            hungry. Tasks do keep ageing, so you see what's waiting when back. */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <label className="toggle-row" style={{ borderTop: 'none', paddingTop: 0 }}>
+            <span>
+              <span className="toggle-label">🏖️ Vakantiemodus</span>
+              <span className="toggle-description">
+                {vacation
+                  ? `Staat aan sinds ${new Date(vacation.from).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })} (${memberNames[vacation.by] ?? '…'})`
+                  : 'Voor jullie allebei: geen ochtendherinnering en geen weekoverzicht, en de kat krijgt geen honger. Taken lopen gewoon door, zodat je bij thuiskomst ziet wat er ligt.'}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="switch"
+              checked={!!vacation}
+              onChange={(e) => toggleVacation(e.target.checked)}
+            />
+          </label>
+          {vacationError && (
+            <p className="settings-note" style={{ color: 'var(--color-danger)', marginTop: 8, marginBottom: 0 }}>
+              {vacationError}
+            </p>
+          )}
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>

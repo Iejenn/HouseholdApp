@@ -43,6 +43,15 @@ export interface Household {
   catLook?: Partial<Record<'wall' | 'floor' | 'collar' | 'hat', string | null>>;
   // Where the weather on the home screen is for (rounded to ~1 km)
   location?: WeatherLocation;
+  // Vacation mode for the whole household (the cat is shared). The last few
+  // periods are kept so the cat's food bowl can skip that time; `to` is null
+  // while it's still on.
+  vacations?: VacationPeriod[];
+}
+export interface VacationPeriod {
+  from: number;
+  to: number | null;
+  by: string;
 }
 export interface WeatherLocation {
   lat: number;
@@ -63,6 +72,7 @@ export interface Task {
   assignedTo: string | null;
   isRecurring: boolean;
   recurrence: Recurrence | null;
+  // Deadline for a one-off task: start of that day (local time), or null
   dueAt: number | null;
   completedAt: number | null;
   completedBy: string | null;

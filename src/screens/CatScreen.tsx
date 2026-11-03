@@ -107,7 +107,7 @@ export default function CatScreen() {
     []
   );
 
-  const cat = computeCat(purchases, now);
+  const cat = computeCat(purchases, now, household?.vacations);
   const name = household?.catName?.trim() || DEFAULT_CAT_NAME;
   const look = household?.catLook ?? {};
   const level = houseLevel(earned);

@@ -1338,6 +1338,14 @@
   flex: 1;
 }
 
+.day-btn {
+  white-space: nowrap;
+}
+
+.label-short {
+  display: none;
+}
+
 .picker-list {
   display: flex;
   flex-direction: column;
@@ -1806,13 +1814,6 @@
     padding-right: 28px;
   }
 
-  /* On wide screens the full-width "Hele week naar boodschappen" bar looked
-     huge; a normal-sized button next to Gerechten is enough */
-  .menu-actions .btn-primary {
-    flex: 0 0 auto;
-    padding: 10px 18px;
-  }
-
   /* Forms and settings read better at a normal width */
   .narrow-content > * {
     max-width: 680px;
@@ -1847,6 +1848,16 @@
 
   .day-grid .day-card {
     margin-bottom: 0;
+  }
+
+  /* In the grid the cards are narrow: the long label wrapped to two lines
+     and made the black button huge, so use the short one */
+  .day-grid .label-long {
+    display: none;
+  }
+
+  .day-grid .label-short {
+    display: inline;
   }
 
   .home-layout,

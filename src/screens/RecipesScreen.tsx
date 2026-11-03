@@ -8,6 +8,7 @@ import { useUndoableDelete } from '../hooks/useUndoableDelete';
 import SwipeToDelete from '../components/SwipeToDelete';
 import UndoToast from '../components/UndoToast';
 import { addIngredientsToGroceries, addResultText, parseIngredients } from '../lib/groceries';
+import { searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Recipe } from '../types';
 
@@ -20,6 +21,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
   const [editing, setEditing] = useState<Recipe | 'new' | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const swipe = useUndoableDelete<Recipe>((recipe) => {
     deleteDoc(doc(db, 'households', householdId, 'recipes', recipe.id)).catch((err) =>
@@ -44,7 +46,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
     window.setTimeout(() => setInfo((cur) => (cur === text ? null : cur)), 3500);
   }
 
-  const visible = recipes.filter((r) => r.id !== swipe.pending?.id);
+  const visible = searchRecipes(recipes, query).filter((r) => r.id !== swipe.pending?.id);
 
   return (
     <div className="page-overlay">
@@ -63,7 +65,21 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="app-content narrow-content">
-        {visible.length === 0 && (
+        {recipes.length > 0 && (
+          <input
+            className="input recipe-search"
+            type="search"
+            placeholder="🔍 Zoek op gerecht of ingrediënt…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        )}
+        {query.trim() && visible.length === 0 && (
+          <p className="empty-state" style={{ padding: '24px 20px' }}>
+            Geen gerecht gevonden met "{query.trim()}".
+          </p>
+        )}
+        {!query.trim() && visible.length === 0 && (
           <p className="empty-state">
             🍝
             <br />
@@ -121,14 +137,17 @@ export function RecipeEditor({
   recipe,
   onClose,
   onSaved,
+  initialName = '',
 }: {
   recipe: Recipe | null;
   onClose: () => void;
   onSaved?: (id: string) => void;
+  // Pre-filled name for a new recipe, e.g. what you searched for
+  initialName?: string;
 }) {
   const { user } = useAuth();
   const { householdId } = useHousehold();
-  const [name, setName] = useState(recipe?.name ?? '');
+  const [name, setName] = useState(recipe?.name ?? initialName);
   const [ingredientsText, setIngredientsText] = useState(recipe?.ingredients.join('\n') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

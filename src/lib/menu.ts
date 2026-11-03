@@ -24,3 +24,23 @@ export function resolveDay(key: DayKey, menu: WeekMenu | null, recipes: Recipe[]
   const recipe = recipes.find((r) => groceryKey(r.name) === groceryKey(defaultName));
   return recipe ? { kind: 'recipe', recipe, isDefault: true } : { kind: 'default-missing', name: defaultName };
 }
+
+// Search text without case or accents ("Crème" = "creme")
+const normalize = (text: string) =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim();
+
+// Recipes matching a search on name OR ingredient ("kip" finds Pasta Pesto
+// via Kipfilet). Name matches come first.
+export function searchRecipes(recipes: Recipe[], query: string): Recipe[] {
+  const q = normalize(query);
+  if (!q) return recipes;
+  const byName = recipes.filter((r) => normalize(r.name).includes(q));
+  const byIngredient = recipes.filter(
+    (r) => !byName.includes(r) && r.ingredients.some((i) => normalize(i).includes(q))
+  );
+  return [...byName, ...byIngredient];
+}

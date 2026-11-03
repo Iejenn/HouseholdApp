@@ -6,7 +6,8 @@ import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
 import { useRecipes } from '../hooks/useRecipes';
 import RecipesScreen, { RecipeEditor } from './RecipesScreen';
-import { DAY_KEYS, DAY_NAMES, addDays, mondayOf, shortDate, weekId, weekRangeLabel } from '../lib/week';
+import { DAY_KEYS, DAY_NAMES, addDays, shortDate, weekId, weekRangeLabel } from '../lib/week';
+import { startOfDay } from '../lib/time';
 import { addIngredientsToGroceries, addResultText, fromRecipe } from '../lib/groceries';
 import type { IngredientToAdd } from '../lib/groceries';
 import { DEFAULT_DISHES, resolveDay, searchRecipes } from '../lib/menu';
@@ -18,24 +19,36 @@ export default function WeekMenuScreen() {
   const { householdId } = useHousehold();
   const recipes = useRecipes(householdId);
   const now = useNow();
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [menu, setMenu] = useState<WeekMenu | null>(null);
-  const [picking, setPicking] = useState<DayKey | null>(null);
+  // Pages of 7 days: 0 = today + the next 6, 1 = the 7 days after that, …
+  const [page, setPage] = useState(0);
+  // Menus per ISO week id; 7 days from today usually span two weeks
+  const [menus, setMenus] = useState<Record<string, WeekMenu>>({});
+  // Index (0–6) of the day being picked for
+  const [picking, setPicking] = useState<number | null>(null);
   const [showRecipes, setShowRecipes] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const monday = addDays(mondayOf(new Date(now)), weekOffset * 7);
-  const id = weekId(monday);
-  const todayKey = weekOffset === 0 ? DAY_KEYS[(new Date(now).getDay() + 6) % 7] : null;
+  // Start at today instead of Monday: nobody cares what we ate yesterday.
+  // Storage stays per ISO week, so nothing already planned moves or is lost.
+  const start = addDays(startOfDay(now), page * 7);
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(start, i);
+    return { i, date, key: DAY_KEYS[(date.getDay() + 6) % 7], week: weekId(date) };
+  });
+  const weekIds = [...new Set(days.map((d) => d.week))];
+  const weekIdsKey = weekIds.join(',');
 
   useEffect(() => {
-    setMenu(null);
-    const unsub = onSnapshot(doc(db, 'households', householdId, 'weekMenus', id), (snap) => {
-      setMenu(snap.exists() ? (snap.data() as WeekMenu) : { days: {}, updatedAt: 0 });
-    });
-    return unsub;
-  }, [householdId, id]);
+    setMenus({});
+    const unsubs = weekIdsKey.split(',').map((wid) =>
+      onSnapshot(doc(db, 'households', householdId, 'weekMenus', wid), (snap) => {
+        const data = snap.exists() ? (snap.data() as WeekMenu) : { days: {}, updatedAt: 0 };
+        setMenus((cur) => ({ ...cur, [wid]: data }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [householdId, weekIdsKey]);
 
   function flash(text: string) {
     setInfo(text);
@@ -43,11 +56,11 @@ export default function WeekMenuScreen() {
   }
 
   // value: a recipe id, null = nothing, 'default' = back to the default (Patat)
-  async function setDay(key: DayKey, value: string | null | 'default') {
+  async function setDay(week: string, key: DayKey, value: string | null | 'default') {
     try {
       // merge: only this one day changes, so you can both plan at the same time
       await setDoc(
-        doc(db, 'households', householdId, 'weekMenus', id),
+        doc(db, 'households', householdId, 'weekMenus', week),
         { days: { [key]: value === 'default' ? deleteField() : value }, updatedAt: Date.now() },
         { merge: true }
       );
@@ -68,7 +81,7 @@ export default function WeekMenuScreen() {
     }
   }
 
-  const planned = DAY_KEYS.map((key) => ({ key, plan: resolveDay(key, menu, recipes) }));
+  const planned = days.map((d) => ({ ...d, plan: resolveDay(d.key, menus[d.week] ?? null, recipes) }));
   // Each ingredient remembers its dish, so the list can say "voor Risotto"
   const weekIngredients = planned.flatMap(({ plan }) => (plan.kind === 'recipe' ? fromRecipe(plan.recipe) : []));
 
@@ -80,18 +93,18 @@ export default function WeekMenuScreen() {
         <div>
           <h2 className="household-name">Weekmenu</h2>
           <div className="week-nav">
-            <button className="week-arrow" onClick={() => setWeekOffset((w) => w - 1)} aria-label="Vorige week">
+            <button className="week-arrow" onClick={() => setPage((w) => w - 1)} aria-label="Vorige 7 dagen">
               ‹
             </button>
             <span className="week-label">
-              {weekRangeLabel(monday)} · week {Number(id.slice(-2))}
+              {weekRangeLabel(start)}
             </span>
-            <button className="week-arrow" onClick={() => setWeekOffset((w) => w + 1)} aria-label="Volgende week">
+            <button className="week-arrow" onClick={() => setPage((w) => w + 1)} aria-label="Volgende 7 dagen">
               ›
             </button>
-            {weekOffset !== 0 && (
-              <button className="link-button" onClick={() => setWeekOffset(0)} style={{ fontSize: 12 }}>
-                Deze week
+            {page !== 0 && (
+              <button className="link-button" onClick={() => setPage(0)} style={{ fontSize: 12 }}>
+                Vandaag
               </button>
             )}
           </div>
@@ -114,9 +127,8 @@ export default function WeekMenuScreen() {
       <div className="app-content">
         {/* A grid of day cards on wide screens, one column on phones */}
         <div className="day-grid">
-          {planned.map(({ key, plan }, i) => {
-            const date = addDays(monday, i);
-            const isToday = key === todayKey;
+          {planned.map(({ i, key, week, date, plan }) => {
+            const isToday = page === 0 && i === 0;
             return (
               <div key={key} className={`day-card day-${key}${isToday ? ' today' : ''}`}>
                 <div className="day-head">
@@ -124,7 +136,7 @@ export default function WeekMenuScreen() {
                   <span className="day-date">{shortDate(date)}</span>
                   {isToday && <span className="day-today">Vandaag</span>}
                 </div>
-                <button className="day-body" onClick={() => setPicking(key)}>
+                <button className="day-body" onClick={() => setPicking(i)}>
                   {plan.kind === 'recipe' && (
                     <>
                       <span className="day-dish">
@@ -164,7 +176,7 @@ export default function WeekMenuScreen() {
                         </>
                       )}
                     </button>
-                    <button className="btn btn-ghost day-btn" onClick={() => setDay(key, null)}>
+                    <button className="btn btn-ghost day-btn" onClick={() => setDay(week, key, null)}>
                       Wissen
                     </button>
                   </div>
@@ -176,15 +188,15 @@ export default function WeekMenuScreen() {
       </div>
 
       {/* Hidden while choosing a dish, so it doesn't cover the list */}
-      {info && !picking && <div className="undo-toast info-toast">{info}</div>}
+      {info && picking === null && <div className="undo-toast info-toast">{info}</div>}
 
-      {picking && (
+      {picking !== null && (
         <RecipePicker
-          day={picking}
+          day={days[picking].key}
           recipes={recipes}
-          current={menu?.days[picking]}
+          current={menus[days[picking].week]?.days[days[picking].key]}
           onPick={(value) => {
-            setDay(picking, value);
+            setDay(days[picking].week, days[picking].key, value);
             setPicking(null);
           }}
           onClose={() => setPicking(null)}

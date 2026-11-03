@@ -10,6 +10,8 @@ import CatScreen from './screens/CatScreen';
 import HomeScreen from './screens/HomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { listenForTestPush, refreshPush } from './lib/push';
+import { finishCalendarLink, forgetCachedEvents } from './lib/calendar';
+import { dutchError } from './lib/firebaseErrors';
 import InstallPrompt from './components/InstallPrompt';
 import { ErrorBoundary, GlobalErrorBar } from './components/ErrorBoundary';
 import { HouseholdProvider } from './context/HouseholdContext';
@@ -46,6 +48,7 @@ function MainShell() {
   const [tab, setTab] = useState<Tab>(tabFromUrl);
   // Where ⚙️ returns to when tapped again
   const [lastTab, setLastTab] = useState<Tab>('home');
+  const [notice, setNotice] = useState<string | null>(null);
 
   function toggleSettings() {
     if (tab === 'settings') setTab(lastTab);
@@ -64,6 +67,35 @@ function MainShell() {
     navigator.serviceWorker?.addEventListener('message', onMessage);
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
   }, []);
+
+  // Back from Google's sign-in for "Agenda koppelen": ?code=…&state=…
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    const denied = params.get('error');
+    if (!state || (!code && !denied)) return;
+    // Remove the one-time code from the address bar right away
+    window.history.replaceState(null, '', import.meta.env.BASE_URL);
+    setTab('settings');
+    if (denied || !code) {
+      setNotice('Agenda koppelen geannuleerd.');
+      return;
+    }
+    setNotice('Agenda koppelen…');
+    finishCalendarLink(code, state)
+      .then(({ email }) => {
+        forgetCachedEvents();
+        setNotice(`Gekoppeld met ${email || 'Google'} ✓ Kies hieronder welke agenda's je deelt.`);
+      })
+      .catch((err) => setNotice(dutchError(err, 'Koppelen lukte niet. Probeer het opnieuw.')));
+  }, []);
+
+  useEffect(() => {
+    if (!notice || notice.endsWith('…')) return;
+    const id = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(id);
+  }, [notice]);
 
   useEffect(() => {
     if (!user) return;
@@ -94,6 +126,7 @@ function MainShell() {
         >
           {tab === 'settings' ? '✕' : '⚙️'}
         </button>
+        {notice && <div className="undo-toast info-toast">{notice}</div>}
         <nav className="tabbar">
           {TABS.map((t) => (
             <button

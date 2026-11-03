@@ -27,7 +27,8 @@ import { DAY_KEYS, weekId } from '../lib/week';
 import { isTaskDone, isTaskLate } from '../lib/time';
 import { toggleTaskDone } from '../lib/tasks';
 import { dutchError } from '../lib/firebaseErrors';
-import type { GroceryItem, Task, WeekMenu } from '../types';
+import { fetchEvents } from '../lib/calendar';
+import type { CalendarEvent, GroceryItem, Task, WeekMenu } from '../types';
 
 export type HomeTarget = 'tasks' | 'groceries' | 'menu' | 'cat';
 
@@ -87,6 +88,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [weatherError, setWeatherError] = useState(false);
   const [pickingPlace, setPickingPlace] = useState(false);
+  const [agenda, setAgenda] = useState<{ linked: number; events: CalendarEvent[] } | null>(null);
 
   useEffect(() => {
     const unsubs = [
@@ -142,6 +144,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
       .then(setForecast)
       .catch(() => setWeatherError(true));
   }, [location?.lat, location?.lon]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Calendar: re-asked when your own calendar choice changes; failures just
+  // hide the card (the rest of the home screen shouldn't depend on Google)
+  const calendarKey = `${profile?.calendar?.linkedAt ?? 0}:${(profile?.calendar?.selected ?? []).join(',')}`;
+  useEffect(() => {
+    fetchEvents()
+      .then(setAgenda)
+      .catch(() => setAgenda(null));
+  }, [calendarKey]);
 
   const name = profile?.displayName ?? '';
   const todayKey = DAY_KEYS[(today.getDay() + 6) % 7];
@@ -211,6 +222,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
             </div>
           </SectionCard>
         )}
+
+        {agenda && agenda.linked > 0 && <AgendaCard events={agenda.events} now={now} />}
 
         <div className="home-grid">
           <button className="home-tile" style={{ '--card-color': '#f8ecc4' } as CSSProperties} onClick={() => onNavigate('menu')}>
@@ -313,6 +326,54 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
 
       {writing && <NoteComposer onClose={() => setWriting(false)} />}
     </>
+  );
+}
+
+// Today and the next two days from the linked Google calendars
+function AgendaCard({ events, now }: { events: CalendarEvent[]; now: number }) {
+  const startOf = (e: CalendarEvent) => (e.allDay ? new Date(`${e.start}T00:00:00`) : new Date(e.start));
+  const labelFor = (d: Date) => {
+    const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000);
+    if (diff === 0) return 'Vandaag';
+    if (diff === 1) return 'Morgen';
+    return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
+  };
+
+  // Group by day, keeping the order the server sorted them in
+  const groups: { label: string; items: CalendarEvent[] }[] = [];
+  for (const e of events) {
+    const d = startOf(e);
+    const label = labelFor(d);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(e);
+    else groups.push({ label, items: [e] });
+  }
+
+  return (
+    <SectionCard color="#e6ddf3" title="📅 Agenda" className="home-card">
+      {groups.length === 0 ? (
+        <p className="settings-note section-card-pad" style={{ marginBottom: 0 }}>
+          Niets gepland de komende dagen.
+        </p>
+      ) : (
+        groups.map((g) => (
+          <div key={g.label}>
+            <p className="event-day">{g.label}</p>
+            {g.items.map((e, i) => (
+              <div className="event-row" key={`${e.start}-${i}`}>
+                <span className="event-time">
+                  {e.allDay
+                    ? 'hele dag'
+                    : new Date(e.start).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span className="calendar-dot" style={{ background: e.color }} />
+                <span className="event-title">{e.title}</span>
+              </div>
+            ))}
+          </div>
+        ))
+      )}
+    </SectionCard>
   );
 }
 

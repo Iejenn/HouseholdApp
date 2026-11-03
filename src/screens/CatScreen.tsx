@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
 import CatScene from '../components/CatScene';
+import SectionCard from '../components/SectionCard';
 import type { CatPose } from '../components/CatScene';
 import {
   HOUSE_LEVELS,
@@ -65,13 +66,14 @@ function pickLine(mood: CatMood, sleeping: boolean, openTasks: Task[]): string {
 const PLAY_LINES = ['Pak \'m! 🐾', 'Hebbes!', 'Nog een keer!', 'Kijk mij eens!', 'Wiebel wiebel…'];
 const pick = (lines: string[]) => lines[Math.floor(Math.random() * lines.length)];
 
-const SHOP_SECTIONS: { title: string; match: (i: ShopItem) => boolean }[] = [
-  { title: 'Eten & snoep', match: (i) => i.kind === 'food' || i.kind === 'treat' },
-  { title: 'Speelgoed & meubels', match: (i) => i.kind === 'permanent' },
-  { title: 'Behang', match: (i) => i.slot === 'wall' },
-  { title: 'Vloeren', match: (i) => i.slot === 'floor' },
-  { title: 'Halsbandjes', match: (i) => i.slot === 'collar' },
-  { title: 'Hoedjes', match: (i) => i.slot === 'hat' },
+// Each shop section is a card with its own header colour (week-menu look)
+const SHOP_SECTIONS: { title: string; color: string; match: (i: ShopItem) => boolean }[] = [
+  { title: '🥣 Eten & snoep', color: '#f8dfd2', match: (i) => i.kind === 'food' || i.kind === 'treat' },
+  { title: '🧶 Speelgoed & meubels', color: '#dbe8f5', match: (i) => i.kind === 'permanent' },
+  { title: '🖼️ Behang', color: '#e6ddf3', match: (i) => i.slot === 'wall' },
+  { title: '🪵 Vloeren', color: '#f8ecc4', match: (i) => i.slot === 'floor' },
+  { title: '🎀 Halsbandjes', color: '#f6dbe4', match: (i) => i.slot === 'collar' },
+  { title: '👑 Hoedjes', color: '#dcefd9', match: (i) => i.slot === 'hat' },
 ];
 
 export default function CatScreen() {
@@ -276,63 +278,63 @@ export default function CatScreen() {
         </div>
 
         {/* House level: grows with the number of tasks done together */}
-        <div className="card house-card">
-          <p className="card-title" style={{ marginBottom: 4 }}>
-            🏡 {HOUSE_LEVELS[level].name}
-          </p>
-          {next ? (
-            <>
-              <p className="settings-note" style={{ marginBottom: 8 }}>
-                Nog {next.at - earned} {next.at - earned === 1 ? 'taak' : 'taken'} tot {next.unlocks}.
+        <SectionCard color="#d4ece4" title={`🏡 ${HOUSE_LEVELS[level].name}`} className="house-card">
+          <div className="section-card-pad">
+            {next ? (
+              <>
+                <p className="settings-note" style={{ marginBottom: 8 }}>
+                  Nog {next.at - earned} {next.at - earned === 1 ? 'taak' : 'taken'} tot {next.unlocks}.
+                </p>
+                <div className="stat-track">
+                  <div
+                    className="stat-fill"
+                    style={{
+                      width: `${Math.round(
+                        ((earned - HOUSE_LEVELS[level].at) / (next.at - HOUSE_LEVELS[level].at)) * 100
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="settings-note" style={{ marginBottom: 0 }}>
+                Het huis is helemaal af! Samen al {earned} taken gedaan. 🎉
               </p>
-              <div className="stat-track">
-                <div
-                  className="stat-fill"
-                  style={{
-                    width: `${Math.round(
-                      ((earned - HOUSE_LEVELS[level].at) / (next.at - HOUSE_LEVELS[level].at)) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            <p className="settings-note" style={{ marginBottom: 0 }}>
-              Het huis is helemaal af! Samen al {earned} taken gedaan. 🎉
-            </p>
-          )}
-        </div>
+            )}
+          </div>
+        </SectionCard>
 
         {wardrobeSlots.length > 0 && (
-          <div className="card house-card">
-            <p className="card-title">🎨 Inrichten</p>
-            {wardrobeSlots.map((slot) => (
-              <div key={slot} style={{ marginBottom: 6 }}>
-                <span className="field-label">{SLOT_LABELS[slot].label}</span>
-                <div className="chip-row" style={{ marginBottom: 6 }}>
-                  <button className={`chip${!look[slot] ? ' active' : ''}`} onClick={() => wear(slot, null)}>
-                    {SLOT_LABELS[slot].none}
-                  </button>
-                  {ownedBySlot(slot).map((i) => (
-                    <button
-                      key={i.id}
-                      className={`chip${look[slot] === i.id ? ' active' : ''}`}
-                      onClick={() => wear(slot, i.id)}
-                    >
-                      {i.emoji} {i.name}
+          <SectionCard color="#e6ddf3" title="🎨 Inrichten" className="house-card">
+            <div className="section-card-pad">
+              {wardrobeSlots.map((slot) => (
+                <div key={slot} style={{ marginBottom: 6 }}>
+                  <span className="field-label">{SLOT_LABELS[slot].label}</span>
+                  <div className="chip-row" style={{ marginBottom: 6 }}>
+                    <button className={`chip${!look[slot] ? ' active' : ''}`} onClick={() => wear(slot, null)}>
+                      {SLOT_LABELS[slot].none}
                     </button>
-                  ))}
+                    {ownedBySlot(slot).map((i) => (
+                      <button
+                        key={i.id}
+                        className={`chip${look[slot] === i.id ? ' active' : ''}`}
+                        onClick={() => wear(slot, i.id)}
+                      >
+                        {i.emoji} {i.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </SectionCard>
         )}
 
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: '12px 0' }}>{error}</p>}
 
+        <p className="section-label">Winkeltje</p>
         {SHOP_SECTIONS.map((section) => (
-          <div key={section.title}>
-            <p className="section-label">{section.title}</p>
+          <SectionCard key={section.title} color={section.color} title={section.title}>
             {SHOP_ITEMS.filter(section.match).map((item) => {
               const reason = unavailableReason(item);
               const tooExpensive = balance < item.cost;
@@ -357,7 +359,7 @@ export default function CatScreen() {
                 </div>
               );
             })}
-          </div>
+          </SectionCard>
         ))}
 
         <p className="cat-footnote">

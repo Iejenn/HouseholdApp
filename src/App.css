@@ -1573,3 +1573,49 @@
   background: var(--color-surface);
   color: var(--color-ink);
 }
+
+/* ── Section cards (week-menu look, shared by all screens) ─── */
+
+.section-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.section-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  background: var(--card-color, var(--color-surface-alt));
+}
+
+.section-card-title {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+/* Rows run edge to edge so swiping still reveals the full-width action */
+.section-card-body .task-row,
+.section-card-body .shop-row,
+.section-card-body .recipe-card {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.section-card-body > .swipe-wrap:last-child .task-row,
+.section-card-body > .task-row:last-child,
+.section-card-body > .shop-row:last-child {
+  border-bottom: none;
+}
+
+.section-card .swipe-content {
+  background: var(--color-surface);
+}
+
+.section-card-pad {
+  padding: 12px 14px 10px;
+}

@@ -20,6 +20,7 @@ import UndoToast from '../components/UndoToast';
 import { isHiddenDone } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
 import RecipesScreen from './RecipesScreen';
+import SectionCard from '../components/SectionCard';
 import type { GroceryItem } from '../types';
 
 export default function GroceriesScreen() {
@@ -162,19 +163,27 @@ export default function GroceriesScreen() {
           </p>
         )}
 
-        {open.map((item) => (
-          <GroceryRow
-            key={item.id}
-            item={item}
-            meta={`door ${memberNames[item.addedBy] ?? '…'}`}
-            onToggle={() => toggleChecked(item)}
-            onRemove={() => swipe.remove(item)}
-          />
-        ))}
+        {/* Same card look as the week menu */}
+        {open.length > 0 && (
+          <SectionCard color="#f8dfd2" title="🛒 Te halen" aside={<span className="section-count">{open.length}</span>}>
+            {open.map((item) => (
+              <GroceryRow
+                key={item.id}
+                item={item}
+                meta={`door ${memberNames[item.addedBy] ?? '…'}`}
+                onToggle={() => toggleChecked(item)}
+                onRemove={() => swipe.remove(item)}
+              />
+            ))}
+          </SectionCard>
+        )}
 
         {checked.length > 0 && (
-          <>
-            <p className="section-label">In het mandje</p>
+          <SectionCard
+            color="#e9e6e0"
+            title="🧺 In het mandje"
+            aside={<span className="section-count">{checked.length}</span>}
+          >
             {checked.map((item) => (
               <GroceryRow
                 key={item.id}
@@ -184,7 +193,7 @@ export default function GroceriesScreen() {
                 onRemove={() => swipe.remove(item)}
               />
             ))}
-          </>
+          </SectionCard>
         )}
 
         {items.length > 0 && (

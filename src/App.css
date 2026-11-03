@@ -1806,6 +1806,13 @@
     padding-right: 28px;
   }
 
+  /* On wide screens the full-width "Hele week naar boodschappen" bar looked
+     huge; a normal-sized button next to Gerechten is enough */
+  .menu-actions .btn-primary {
+    flex: 0 0 auto;
+    padding: 10px 18px;
+  }
+
   /* Forms and settings read better at a normal width */
   .narrow-content > * {
     max-width: 680px;

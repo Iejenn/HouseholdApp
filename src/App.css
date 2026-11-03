@@ -480,6 +480,53 @@
   font-weight: 700;
 }
 
+/* Deadline on one-off tasks: grey while there's time, orange on the day,
+   red once it's missed */
+.deadline-soon {
+  color: var(--color-ink-soft);
+}
+
+.deadline-today {
+  color: #c06a12;
+  font-weight: 700;
+}
+
+.deadline-late {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.deadline-input {
+  margin: -4px 0 16px;
+}
+
+/* Home: vacation mode is on */
+.vacation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 16px;
+  background: #dbeef5;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.vacation-sub {
+  display: block;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--color-ink-soft);
+}
+
+.vacation-bar .btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .nudge-box {
   background: var(--color-surface-alt);
   border-radius: var(--radius-md);

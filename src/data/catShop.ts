@@ -1,4 +1,4 @@
-import type { Purchase } from '../types';
+import type { Purchase, VacationPeriod } from '../types';
 
 // Everything the cat's points can buy. Prices are also checked in the
 // Firestore rules (purchases) — change both together.
@@ -89,7 +89,19 @@ const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
 // Everything is derived from the purchase history + the clock, so there is
 // no separate cat document that could get out of sync
-export function computeCat(purchases: Purchase[], now: number): CatState {
+// Vacation mode: time inside these periods doesn't count for the food bowl,
+// so the cat is exactly as full after the holiday as before it
+function pausedMs(from: number, to: number, pauses: VacationPeriod[]): number {
+  let total = 0;
+  for (const p of pauses) {
+    const start = Math.max(from, p.from);
+    const end = Math.min(to, p.to ?? to);
+    if (end > start) total += end - start;
+  }
+  return total;
+}
+
+export function computeCat(purchases: Purchase[], now: number, pauses: VacationPeriod[] = []): CatState {
   const owned = new Set<string>();
   let lastFoodAt = 0;
   let treatBonus = 0;
@@ -101,7 +113,9 @@ export function computeCat(purchases: Purchase[], now: number): CatState {
     else if (item.kind === 'treat' && now - p.createdAt < TREAT_LASTS_MS) treatBonus += item.happiness;
   }
 
-  const fullness = lastFoodAt ? clamp(100 * (1 - (now - lastFoodAt) / FOOD_LASTS_MS)) : 0;
+  const fullness = lastFoodAt
+    ? clamp(100 * (1 - (now - lastFoodAt - pausedMs(lastFoodAt, now, pauses)) / FOOD_LASTS_MS))
+    : 0;
 
   let happiness = BASE_HAPPINESS + Math.min(treatBonus, 20);
   for (const id of owned) happiness += SHOP_ITEMS.find((i) => i.id === id)!.happiness;

@@ -23,7 +23,8 @@ import { nudgeTask } from '../lib/push';
 import { toggleTaskDone } from '../lib/tasks';
 import { OTHER_GROUP_COLOR, TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
 import SectionCard from '../components/SectionCard';
-import { formatAgo, isHiddenDone, isTaskDone, isTaskLate } from '../lib/time';
+import { byDeadline, formatAgo, formatDeadline, isHiddenDone, isTaskDone, isTaskLate, startOfDay } from '../lib/time';
+import { useUndoCheck } from '../hooks/useUndoCheck';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Recurrence, RecurrenceUnit, Task } from '../types';
 
@@ -49,6 +50,7 @@ export default function TaskListScreen() {
   const [burstTaskId, setBurstTaskId] = useState<string | null>(null);
   const [pointPopId, setPointPopId] = useState<string | null>(null);
   const now = useNow();
+  const undoCheck = useUndoCheck(tasks, householdId, user?.uid);
 
   // Deleting the task doc itself, so a recurring task never comes back.
   // Points already earned with it are kept.
@@ -75,6 +77,7 @@ export default function TaskListScreen() {
     if (!isTaskDone(task, Date.now())) {
       setPointPopId(task.id);
       window.setTimeout(() => setPointPopId((cur) => (cur === task.id ? null : cur)), 900);
+      undoCheck.checked(task);
     }
     await toggleTaskDone(householdId, user.uid, task);
   }
@@ -106,13 +109,13 @@ export default function TaskListScreen() {
   const done = visible.filter((t) => isTaskDone(t, now) && !isHiddenDone(t.completedAt, now));
 
   // Open tasks per room/topic, in catalog order, custom tasks without a room last.
-  // Within a room the overdue (red) ones come first.
+  // Within a room the overdue (red) ones come first, then the nearest deadline.
   const sections = [...TASK_GROUPS.map((g) => g.id), null].flatMap((groupId) => {
     const inGroup = open.filter((t) =>
       groupId === null ? !findTaskGroup(t.category) : t.category === groupId
     );
     if (inGroup.length === 0) return [];
-    inGroup.sort((x, y) => Number(isTaskLate(y, now)) - Number(isTaskLate(x, now)));
+    inGroup.sort((x, y) => Number(isTaskLate(y, now)) - Number(isTaskLate(x, now)) || byDeadline(x, y));
     return [{ groupId, tasks: inGroup }];
   });
 
@@ -139,6 +142,14 @@ export default function TaskListScreen() {
           {!isDone && `${who} · `}
           {formatRecurrence(item.recurrence!)} ·{' '}
           <span className={late ? 'task-late-text' : undefined}>{lastDone}</span>
+        </>
+      );
+    } else if (!isDone && item.dueAt != null) {
+      // One-off task with a deadline: grey, orange on the day, red when missed
+      const deadline = formatDeadline(item.dueAt, now);
+      meta = (
+        <>
+          {who} · <span className={`deadline-${deadline.tone}`}>📅 {deadline.text}</span>
         </>
       );
     } else {
@@ -269,6 +280,9 @@ export default function TaskListScreen() {
       </div>
 
       {swipe.pending && <UndoToast label={swipe.pending.title} onUndo={swipe.undo} />}
+      {!swipe.pending && undoCheck.pending && (
+        <UndoToast label={undoCheck.pending.title} action="afgevinkt" onUndo={undoCheck.undo} />
+      )}
 
       <button className="fab" onClick={() => setShowAddModal(true)} aria-label="Taak toevoegen">
         +
@@ -330,6 +344,8 @@ function AddTaskModal({
   const interval = Math.min(365, Math.max(1, parseInt(intervalText) || 1));
   // Room for a custom task, so it lands in the right section of the list
   const [customCategory, setCustomCategory] = useState<string | null>(editing?.category ?? null);
+  // Deadline (one-off tasks only): start of the chosen day, or null
+  const [dueAt, setDueAt] = useState<number | null>(editing?.dueAt ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nudgeState, setNudgeState] = useState<'idle' | 'busy' | 'sent'>('idle');
@@ -390,6 +406,8 @@ function AddTaskModal({
           assignedTo,
           isRecurring,
           recurrence: isRecurring ? { unit, interval } : null,
+          // Recurring tasks have their own rhythm, so no deadline
+          dueAt: isRecurring ? null : dueAt,
         });
         onClose();
       } catch (err) {
@@ -412,7 +430,7 @@ function AddTaskModal({
           assignedTo,
           isRecurring,
           recurrence: isRecurring ? { unit, interval } : null,
-          dueAt: null,
+          dueAt: isRecurring ? null : dueAt,
           completedAt: null,
           completedBy: null,
           hearts: [],
@@ -576,6 +594,8 @@ function AddTaskModal({
           </span>
         </label>
 
+        {!isRecurring && <DeadlinePicker value={dueAt} onChange={setDueAt} />}
+
         {isRecurring && (
           <>
             <span className="field-label">Snel kiezen</span>
@@ -647,5 +667,58 @@ function AddTaskModal({
         </button>
       </div>
     </div>
+  );
+}
+
+// "Uiterlijk op": quick picks plus a date field for anything else
+function DeadlinePicker({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  const today = startOfDay(Date.now());
+  const plus = (days: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + days);
+    return d.getTime();
+  };
+  // Saturday of this week (today when it's already weekend)
+  const weekday = today.getDay();
+  const weekend = plus(weekday === 0 ? 0 : weekday === 6 ? 0 : 6 - weekday);
+  const picks = [
+    { label: 'Geen', value: null },
+    { label: 'Vandaag', value: plus(0) },
+    { label: 'Morgen', value: plus(1) },
+    { label: 'Dit weekend', value: weekend },
+    { label: 'Over een week', value: plus(7) },
+  ];
+  // <input type="date"> works with "YYYY-MM-DD" in local time
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const asInput = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  return (
+    <>
+      <span className="field-label">Uiterlijk op</span>
+      <div className="chip-row">
+        {picks.map((p) => (
+          <button
+            key={p.label}
+            className={`chip${value === p.value ? ' active' : ''}`}
+            onClick={() => onChange(p.value)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <input
+        type="date"
+        className="input deadline-input"
+        value={value != null ? asInput(value) : ''}
+        min={asInput(today.getTime())}
+        onChange={(e) => {
+          const [y, m, d] = e.target.value.split('-').map(Number);
+          onChange(e.target.value ? new Date(y, m - 1, d).getTime() : null);
+        }}
+      />
+    </>
   );
 }

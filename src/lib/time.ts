@@ -3,7 +3,7 @@ import type { Recurrence, Task } from '../types';
 // Checked-off tasks and groceries disappear from the lists after this long
 export const HIDE_DONE_AFTER_MS = 72 * 60 * 60 * 1000;
 
-function startOfDay(ms: number): Date {
+export function startOfDay(ms: number): Date {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
   return d;
@@ -33,7 +33,7 @@ export function isHiddenDone(doneAt: number | null, now: number): boolean {
   return doneAt !== null && now - doneAt > HIDE_DONE_AFTER_MS;
 }
 
-function calendarDaysBetween(from: number, to: number): number {
+export function calendarDaysBetween(from: number, to: number): number {
   return Math.round((startOfDay(to).getTime() - startOfDay(from).getTime()) / 86_400_000);
 }
 
@@ -50,8 +50,31 @@ export function formatAgo(ms: number, now: number): string {
 
 // Late = a whole extra period went by after it was due again. A daily task
 // done yesterday is simply due today; done 3 days ago it turns red.
+// One-off tasks with a deadline are late once that day is over.
 export function isTaskLate(task: Task, now: number): boolean {
-  if (!task.isRecurring || !task.recurrence || !task.completedAt) return false;
+  if (!task.isRecurring) {
+    return !task.completedAt && task.dueAt != null && calendarDaysBetween(task.dueAt, now) > 0;
+  }
+  if (!task.recurrence || !task.completedAt) return false;
   const due = nextDueAt(task.completedAt, task.recurrence);
   return now >= nextDueAt(due, task.recurrence);
+}
+
+const SHORT_WEEKDAYS = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+const SHORT_MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+// Text for a one-off task's deadline: "uiterlijk za 8 nov", "vandaag",
+// "morgen" or "2 dagen over tijd". Tone tells the list which colour to use.
+export function formatDeadline(dueAt: number, now: number): { text: string; tone: 'late' | 'today' | 'soon' } {
+  const days = calendarDaysBetween(now, dueAt);
+  if (days < 0) return { text: `${-days} ${days === -1 ? 'dag' : 'dagen'} over tijd`, tone: 'late' };
+  if (days === 0) return { text: 'moet vandaag', tone: 'today' };
+  if (days === 1) return { text: 'uiterlijk morgen', tone: 'soon' };
+  const d = new Date(dueAt);
+  return { text: `uiterlijk ${SHORT_WEEKDAYS[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`, tone: 'soon' };
+}
+
+// Sort helper: tasks with a deadline before those without, earliest first
+export function byDeadline(a: Task, b: Task): number {
+  return (a.dueAt ?? Infinity) - (b.dueAt ?? Infinity) || 0;
 }

@@ -160,12 +160,16 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
 
   const openTasks = tasks.filter((t) => !isTaskDone(t, now));
   const lateCount = openTasks.filter((t) => isTaskLate(t, now)).length;
-  // Late first, then the ones assigned to you, then the rest
+  // Late first, then one-off tasks (loose jobs like "Oma bellen" that are easy
+  // to forget), then the ones assigned to you, then the rest. Oldest first
+  // within each group, so the order no longer jumps around.
   const topTasks = [...openTasks]
     .sort(
       (a, b) =>
         Number(isTaskLate(b, now)) - Number(isTaskLate(a, now)) ||
-        Number(b.assignedTo === user?.uid) - Number(a.assignedTo === user?.uid)
+        Number(!b.isRecurring) - Number(!a.isRecurring) ||
+        Number(b.assignedTo === user?.uid) - Number(a.assignedTo === user?.uid) ||
+        (a.createdAt ?? 0) - (b.createdAt ?? 0)
     )
     .slice(0, 3);
   const openGroceries = groceries.filter((g) => !g.checkedAt).sort((a, b) => b.createdAt - a.createdAt);

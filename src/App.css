@@ -1890,3 +1890,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
+
+.recipe-search {
+  margin-bottom: 6px;
+}

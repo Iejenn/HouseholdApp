@@ -7,8 +7,8 @@ import { useNow } from '../hooks/useNow';
 import { useRecipes } from '../hooks/useRecipes';
 import RecipesScreen, { RecipeEditor } from './RecipesScreen';
 import { DAY_KEYS, DAY_NAMES, addDays, mondayOf, shortDate, weekId, weekRangeLabel } from '../lib/week';
-import { addIngredientsToGroceries, addResultText, groceryKey } from '../lib/groceries';
-import { DEFAULT_DISHES, resolveDay } from '../lib/menu';
+import { addIngredientsToGroceries, addResultText } from '../lib/groceries';
+import { DEFAULT_DISHES, resolveDay, searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
 import type { DayKey, Recipe, WeekMenu } from '../types';
 
@@ -200,23 +200,36 @@ function RecipePicker({
 }) {
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('');
-  const shown = recipes.filter((r) => groceryKey(r.name).includes(groceryKey(filter)));
+  // Searches names and ingredients, so it stays usable with 20–30+ dishes
+  const shown = searchRecipes(recipes, filter);
 
   if (creating) {
-    // New recipe straight from the menu: save it and plan it on this day
-    return <RecipeEditor recipe={null} onClose={onClose} onSaved={(newId) => onPick(newId)} />;
+    // New recipe straight from the menu: save it and plan it on this day.
+    // A search that found nothing becomes the suggested name.
+    return (
+      <RecipeEditor
+        recipe={null}
+        initialName={shown.length === 0 ? filter.trim() : ''}
+        onClose={onClose}
+        onSaved={(newId) => onPick(newId)}
+      />
+    );
   }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <h3 className="modal-title">Wat eten we {DAY_NAMES[day].toLowerCase()}?</h3>
-        {recipes.length > 6 && (
+        {recipes.length > 0 && (
           <input
             className="input"
-            placeholder="Zoeken…"
+            type="search"
+            placeholder="🔍 Zoek op gerecht of ingrediënt…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
+            // Only jump into the search box when the list is long (saves a
+            // keyboard popping up on phones for a short list)
+            autoFocus={recipes.length > 8}
             style={{ marginBottom: 12 }}
           />
         )}
@@ -232,9 +245,12 @@ function RecipePicker({
             </button>
           ))}
           {recipes.length === 0 && <p className="settings-note">Nog geen gerechten in de bibliotheek.</p>}
+          {recipes.length > 0 && shown.length === 0 && (
+            <p className="settings-note">Geen gerecht gevonden met "{filter.trim()}".</p>
+          )}
         </div>
         <button className="btn btn-secondary btn-block" onClick={() => setCreating(true)} style={{ margin: '12px 0 8px' }}>
-          + Nieuw gerecht
+          {shown.length === 0 && filter.trim() ? `+ Nieuw gerecht "${filter.trim()}"` : '+ Nieuw gerecht'}
         </button>
         {DEFAULT_DISHES[day] && (
           // Clearing the stored value brings back the default (e.g. Patat)

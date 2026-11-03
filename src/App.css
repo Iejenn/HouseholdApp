@@ -1734,3 +1734,159 @@
   letter-spacing: 0.5px;
   color: var(--color-ink-soft);
 }
+
+/* ── Layout wrappers (one column on phones) ────────────────── */
+
+/* The screen next to (or above) the tab bar */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-layout,
+.cat-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Tablet & desktop ──────────────────────────────────────── */
+/* Same blocks, laid out side by side; the tab bar becomes a sidebar */
+
+@media (min-width: 760px) {
+  .app-shell {
+    max-width: 1280px;
+    flex-direction: row;
+  }
+
+  .tabbar {
+    order: -1;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    width: 92px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 18px 0;
+    border-top: none;
+    border-right: 1px solid var(--color-line);
+    overflow-y: auto;
+  }
+
+  .tabbar-item {
+    flex: 0 0 auto;
+    padding: 12px 4px;
+    font-size: 12px;
+    border-radius: var(--radius-md);
+    margin: 0 8px;
+  }
+
+  .tabbar-item.active {
+    background: var(--color-surface-alt);
+  }
+
+  .tabbar-icon {
+    font-size: 22px;
+  }
+
+  .app-header {
+    padding: 26px 28px 18px;
+    padding-right: 76px;
+  }
+
+  .app-content {
+    padding: 0 28px 40px;
+  }
+
+  .grocery-add,
+  .menu-actions,
+  .grocery-suggestions {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  /* Forms and settings read better at a normal width */
+  .narrow-content > * {
+    max-width: 680px;
+  }
+
+  /* Cards flow into as many ~340px columns as fit */
+  .card-columns {
+    columns: 340px 3;
+    column-gap: 16px;
+  }
+
+  .card-columns > .section-card {
+    break-inside: avoid;
+    display: inline-block;
+    width: 100%;
+  }
+
+  /* Two lists next to each other (groceries: to get | in the basket) */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  .day-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+
+  .day-grid .day-card {
+    margin-bottom: 0;
+  }
+
+  .home-layout,
+  .cat-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* The cat stays in view while scrolling through the shop */
+  .cat-side {
+    position: sticky;
+    top: 0;
+  }
+
+  .board {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  /* Pop-ups as centred dialogs instead of bottom sheets */
+  .modal-backdrop {
+    align-items: center;
+  }
+
+  .modal-card {
+    border-radius: 22px;
+    max-width: 520px;
+  }
+
+  /* No bottom tab bar to keep clear of */
+  .fab {
+    bottom: 28px;
+    right: max(28px, calc((100vw - 1280px) / 2 + 28px));
+  }
+
+  .undo-toast {
+    bottom: 24px;
+  }
+
+  .undo-toast + .fab {
+    bottom: 92px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .home-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}

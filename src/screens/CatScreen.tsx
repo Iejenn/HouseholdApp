@@ -241,130 +241,136 @@ export default function CatScreen() {
       </div>
 
       <div className="app-content">
-        <div className="card cat-card">
-          <div className="cat-stage">
-            <CatScene
-              mood={petting && !sleeping ? 'happy' : cat.mood}
-              sleeping={sleeping}
-              // At night he sleeps curled up in a ball
-              pose={sleeping ? 'lie' : pose}
-              activeToy={activeToy}
-              onToy={playWith}
-              onBed={napInBed}
-              onBowl={checkBowl}
-              fullness={cat.fullness}
-              owned={cat.owned}
-              look={look}
-              level={level}
-              dayPart={part}
-              season={getSeason(now)}
-              petting={petting}
-              onPet={pet}
-            />
-            {speech && <div className="cat-speech">{speech}</div>}
-            {petting && (
-              <>
-                <span className="cat-heart" style={{ left: '44%', animationDelay: '0ms' }}>💕</span>
-                <span className="cat-heart" style={{ left: '54%', animationDelay: '150ms' }}>❤️</span>
-                <span className="cat-heart" style={{ left: '49%', animationDelay: '300ms' }}>💕</span>
-              </>
-            )}
-          </div>
-          <p className="cat-mood">{moodText(cat.mood, name, sleeping)}</p>
-          <p className="cat-hint">Tik op {name}, zijn speeltjes, mand of voerbak</p>
+        {/* Tablet/desktop: the cat on the left, the shop on the right */}
+        <div className="cat-layout">
+          <div className="cat-side">
+            <div className="card cat-card">
+              <div className="cat-stage">
+                <CatScene
+                  mood={petting && !sleeping ? 'happy' : cat.mood}
+                  sleeping={sleeping}
+                  // At night he sleeps curled up in a ball
+                  pose={sleeping ? 'lie' : pose}
+                  activeToy={activeToy}
+                  onToy={playWith}
+                  onBed={napInBed}
+                  onBowl={checkBowl}
+                  fullness={cat.fullness}
+                  owned={cat.owned}
+                  look={look}
+                  level={level}
+                  dayPart={part}
+                  season={getSeason(now)}
+                  petting={petting}
+                  onPet={pet}
+                />
+                {speech && <div className="cat-speech">{speech}</div>}
+                {petting && (
+                  <>
+                    <span className="cat-heart" style={{ left: '44%', animationDelay: '0ms' }}>💕</span>
+                    <span className="cat-heart" style={{ left: '54%', animationDelay: '150ms' }}>❤️</span>
+                    <span className="cat-heart" style={{ left: '49%', animationDelay: '300ms' }}>💕</span>
+                  </>
+                )}
+              </div>
+              <p className="cat-mood">{moodText(cat.mood, name, sleeping)}</p>
+              <p className="cat-hint">Tik op {name}, zijn speeltjes, mand of voerbak</p>
 
-          <StatBar label="Voerbak" emoji="🥣" value={cat.fullness} warn={cat.fullness < 25} />
-          <StatBar label="Geluk" emoji="💛" value={cat.happiness} warn={cat.happiness < 40} />
-        </div>
-
-        {/* House level: grows with the number of tasks done together */}
-        <SectionCard color="#d4ece4" title={`🏡 ${HOUSE_LEVELS[level].name}`} className="house-card">
-          <div className="section-card-pad">
-            {next ? (
-              <>
-                <p className="settings-note" style={{ marginBottom: 8 }}>
-                  Nog {next.at - earned} {next.at - earned === 1 ? 'taak' : 'taken'} tot {next.unlocks}.
-                </p>
-                <div className="stat-track">
-                  <div
-                    className="stat-fill"
-                    style={{
-                      width: `${Math.round(
-                        ((earned - HOUSE_LEVELS[level].at) / (next.at - HOUSE_LEVELS[level].at)) * 100
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="settings-note" style={{ marginBottom: 0 }}>
-                Het huis is helemaal af! Samen al {earned} taken gedaan. 🎉
-              </p>
-            )}
-          </div>
-        </SectionCard>
-
-        {wardrobeSlots.length > 0 && (
-          <SectionCard color="#e6ddf3" title="🎨 Inrichten" className="house-card">
-            <div className="section-card-pad">
-              {wardrobeSlots.map((slot) => (
-                <div key={slot} style={{ marginBottom: 6 }}>
-                  <span className="field-label">{SLOT_LABELS[slot].label}</span>
-                  <div className="chip-row" style={{ marginBottom: 6 }}>
-                    <button className={`chip${!look[slot] ? ' active' : ''}`} onClick={() => wear(slot, null)}>
-                      {SLOT_LABELS[slot].none}
-                    </button>
-                    {ownedBySlot(slot).map((i) => (
-                      <button
-                        key={i.id}
-                        className={`chip${look[slot] === i.id ? ' active' : ''}`}
-                        onClick={() => wear(slot, i.id)}
-                      >
-                        {i.emoji} {i.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <StatBar label="Voerbak" emoji="🥣" value={cat.fullness} warn={cat.fullness < 25} />
+              <StatBar label="Geluk" emoji="💛" value={cat.happiness} warn={cat.happiness < 40} />
             </div>
-          </SectionCard>
-        )}
 
-        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: '12px 0' }}>{error}</p>}
+            {/* House level: grows with the number of tasks done together */}
+            <SectionCard color="#d4ece4" title={`🏡 ${HOUSE_LEVELS[level].name}`} className="house-card">
+              <div className="section-card-pad">
+                {next ? (
+                  <>
+                    <p className="settings-note" style={{ marginBottom: 8 }}>
+                      Nog {next.at - earned} {next.at - earned === 1 ? 'taak' : 'taken'} tot {next.unlocks}.
+                    </p>
+                    <div className="stat-track">
+                      <div
+                        className="stat-fill"
+                        style={{
+                          width: `${Math.round(
+                            ((earned - HOUSE_LEVELS[level].at) / (next.at - HOUSE_LEVELS[level].at)) * 100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <p className="settings-note" style={{ marginBottom: 0 }}>
+                    Het huis is helemaal af! Samen al {earned} taken gedaan. 🎉
+                  </p>
+                )}
+              </div>
+            </SectionCard>
 
-        <p className="section-label">Winkeltje</p>
-        {SHOP_SECTIONS.map((section) => (
-          <SectionCard key={section.title} color={section.color} title={section.title}>
-            {SHOP_ITEMS.filter(section.match).map((item) => {
-              const reason = unavailableReason(item);
-              const tooExpensive = balance < item.cost;
-              return (
-                <div className="shop-row" key={item.id}>
-                  <span className="shop-emoji">{item.emoji}</span>
-                  <div className="task-info">
-                    <p className="task-title">{item.name}</p>
-                    <p className="task-meta">{item.description}</p>
-                  </div>
-                  {reason ? (
-                    <span className="shop-status">{reason}</span>
-                  ) : (
-                    <button
-                      className="btn btn-primary shop-buy"
-                      onClick={() => buy(item)}
-                      disabled={tooExpensive || busyItem !== null}
-                    >
-                      {item.cost} 🐾
-                    </button>
-                  )}
+            {wardrobeSlots.length > 0 && (
+              <SectionCard color="#e6ddf3" title="🎨 Inrichten" className="house-card">
+                <div className="section-card-pad">
+                  {wardrobeSlots.map((slot) => (
+                    <div key={slot} style={{ marginBottom: 6 }}>
+                      <span className="field-label">{SLOT_LABELS[slot].label}</span>
+                      <div className="chip-row" style={{ marginBottom: 6 }}>
+                        <button className={`chip${!look[slot] ? ' active' : ''}`} onClick={() => wear(slot, null)}>
+                          {SLOT_LABELS[slot].none}
+                        </button>
+                        {ownedBySlot(slot).map((i) => (
+                          <button
+                            key={i.id}
+                            className={`chip${look[slot] === i.id ? ' active' : ''}`}
+                            onClick={() => wear(slot, i.id)}
+                          >
+                            {i.emoji} {i.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
-          </SectionCard>
-        ))}
+              </SectionCard>
+            )}
+          </div>
+          <div className="cat-shop">
+            {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: '12px 0' }}>{error}</p>}
 
-        <p className="cat-footnote">
-          Samen al {earned} {earned === 1 ? 'taak' : 'taken'} afgevinkt. Elke taak = 1 🐾.
-        </p>
+            <p className="section-label">Winkeltje</p>
+            {SHOP_SECTIONS.map((section) => (
+              <SectionCard key={section.title} color={section.color} title={section.title}>
+                {SHOP_ITEMS.filter(section.match).map((item) => {
+                  const reason = unavailableReason(item);
+                  const tooExpensive = balance < item.cost;
+                  return (
+                    <div className="shop-row" key={item.id}>
+                      <span className="shop-emoji">{item.emoji}</span>
+                      <div className="task-info">
+                        <p className="task-title">{item.name}</p>
+                        <p className="task-meta">{item.description}</p>
+                      </div>
+                      {reason ? (
+                        <span className="shop-status">{reason}</span>
+                      ) : (
+                        <button
+                          className="btn btn-primary shop-buy"
+                          onClick={() => buy(item)}
+                          disabled={tooExpensive || busyItem !== null}
+                        >
+                          {item.cost} 🐾
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </SectionCard>
+            ))}
+
+            <p className="cat-footnote">
+              Samen al {earned} {earned === 1 ? 'taak' : 'taken'} afgevinkt. Elke taak = 1 🐾.
+            </p>
+          </div>
+        </div>
       </div>
     </>
   );

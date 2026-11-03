@@ -189,139 +189,146 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
       </div>
 
       <div className="app-content">
-        {/* Weather: 7 days, or ask where once */}
-        {location && forecast && (
-          <div className="weather-strip">
-            {forecast.days.map((d, i) => {
-              const w = describeWeather(d.code);
-              const date = new Date(`${d.date}T12:00:00`);
-              return (
-                <div key={d.date} className={`weather-day${i === 0 ? ' today' : ''}`}>
-                  <span className="weather-name">{i === 0 ? 'Vandaag' : SHORT_DAYS[date.getDay()]}</span>
-                  <span className="weather-emoji">{w.emoji}</span>
-                  <span className="weather-temp">
-                    <strong>{d.max}°</strong> {d.min}°
-                  </span>
-                  <span className={`weather-rain${d.rain >= 40 ? ' wet' : ''}`}>💧{d.rain}%</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {location && weatherError && <p className="settings-note">Het weer kon niet geladen worden.</p>}
-        {!location && (
-          <SectionCard color="#dbe8f5" title="🌤️ Weer" className="home-card">
-            <div className="section-card-pad">
-              {pickingPlace ? (
-                <WeatherLocationPicker onDone={() => setPickingPlace(false)} />
-              ) : (
-                <button className="btn btn-secondary btn-block" onClick={() => setPickingPlace(true)}>
-                  Weer instellen
-                </button>
-              )}
-            </div>
-          </SectionCard>
-        )}
-
-        {agenda && agenda.linked > 0 && <AgendaCard events={agenda.events} now={now} />}
-
-        <div className="home-grid">
-          <button className="home-tile" style={{ '--card-color': '#f8ecc4' } as CSSProperties} onClick={() => onNavigate('menu')}>
-            <span className="home-tile-head">🍽️ Vanavond</span>
-            <span className="home-tile-main">
-              {tonight.kind === 'recipe'
-                ? tonight.recipe.name
-                : tonight.kind === 'default-missing'
-                  ? `${tonight.name} 🍟`
-                  : 'Nog niks gepland'}
-            </span>
-          </button>
-          <button className="home-tile" style={{ '--card-color': '#f8dfd2' } as CSSProperties} onClick={() => onNavigate('groceries')}>
-            <span className="home-tile-head">🛒 Boodschappen</span>
-            <span className="home-tile-main">
-              {openGroceries.length === 0 ? 'Niks nodig' : `${openGroceries.length} te halen`}
-            </span>
-            {openGroceries.length > 0 && (
-              <span className="home-tile-sub">{openGroceries.slice(0, 4).map((g) => g.text).join(', ')}</span>
+        {/* Two columns on tablet/desktop: overview left, post-it board right */}
+        <div className="home-layout">
+          <div className="home-main">
+            {/* Weather: 7 days, or ask where once */}
+            {location && forecast && (
+              <div className="weather-strip">
+                {forecast.days.map((d, i) => {
+                  const w = describeWeather(d.code);
+                  const date = new Date(`${d.date}T12:00:00`);
+                  return (
+                    <div key={d.date} className={`weather-day${i === 0 ? ' today' : ''}`}>
+                      <span className="weather-name">{i === 0 ? 'Vandaag' : SHORT_DAYS[date.getDay()]}</span>
+                      <span className="weather-emoji">{w.emoji}</span>
+                      <span className="weather-temp">
+                        <strong>{d.max}°</strong> {d.min}°
+                      </span>
+                      <span className={`weather-rain${d.rain >= 40 ? ' wet' : ''}`}>💧{d.rain}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
-          </button>
-        </div>
-
-        <SectionCard
-          color="#d4ece4"
-          title="✅ Taken"
-          className="home-card"
-          aside={
-            <button className="link-button home-more" onClick={() => onNavigate('tasks')}>
-              {openTasks.length} open{lateCount ? ` · ${lateCount} te laat` : ''} ›
-            </button>
-          }
-        >
-          {topTasks.length === 0 ? (
-            <p className="settings-note section-card-pad" style={{ marginBottom: 0 }}>
-              Alles gedaan! 🎉
-            </p>
-          ) : (
-            topTasks.map((t) => {
-              const late = isTaskLate(t, now);
-              const group = findTaskGroup(t.category);
-              return (
-                <div key={t.id} className={`task-row${late ? ' late' : ''}`}>
-                  <button
-                    className="task-checkbox"
-                    onClick={() => user && toggleTaskDone(householdId, user.uid, t)}
-                    aria-label="Markeer als gedaan"
-                  />
-                  <div className="task-info">
-                    <p className="task-title">
-                      {group && <span className="task-emoji">{group.emoji}</span>}
-                      {t.title}
-                    </p>
-                    {late && <p className="task-meta task-late-text">te laat</p>}
-                  </div>
+            {location && weatherError && <p className="settings-note">Het weer kon niet geladen worden.</p>}
+            {!location && (
+              <SectionCard color="#dbe8f5" title="🌤️ Weer" className="home-card">
+                <div className="section-card-pad">
+                  {pickingPlace ? (
+                    <WeatherLocationPicker onDone={() => setPickingPlace(false)} />
+                  ) : (
+                    <button className="btn btn-secondary btn-block" onClick={() => setPickingPlace(true)}>
+                      Weer instellen
+                    </button>
+                  )}
                 </div>
-              );
-            })
-          )}
-        </SectionCard>
+              </SectionCard>
+            )}
 
-        <button className="home-cat" onClick={() => onNavigate('cat')}>
-          <span className="home-cat-emoji">🐈‍⬛</span>
-          <span className="task-info">
-            <span className="task-title" style={{ display: 'block' }}>
-              {cat.mood === 'hungry'
-                ? `${catName} heeft honger!`
-                : cat.mood === 'happy'
-                  ? `${catName} is superblij`
-                  : cat.mood === 'content'
-                    ? `${catName} is tevreden`
-                    : `${catName} verveelt zich`}
-            </span>
-            <span className="stat-track" style={{ display: 'block', marginTop: 6 }}>
-              <span className={`stat-fill${cat.fullness < 25 ? ' warn' : ''}`} style={{ display: 'block', width: `${cat.fullness}%` }} />
-            </span>
-          </span>
-          <span className="home-more">›</span>
-        </button>
+            {agenda && agenda.linked > 0 && <AgendaCard events={agenda.events} now={now} />}
 
-        {/* Post-it board: replaces the chat */}
-        <div className="board-head">
-          <p className="section-label" style={{ margin: 0 }}>📌 Prikbord</p>
-          <button className="btn btn-primary board-add" onClick={() => setWriting(true)}>
-            + Briefje
-          </button>
+            <div className="home-grid">
+              <button className="home-tile" style={{ '--card-color': '#f8ecc4' } as CSSProperties} onClick={() => onNavigate('menu')}>
+                <span className="home-tile-head">🍽️ Vanavond</span>
+                <span className="home-tile-main">
+                  {tonight.kind === 'recipe'
+                    ? tonight.recipe.name
+                    : tonight.kind === 'default-missing'
+                      ? `${tonight.name} 🍟`
+                      : 'Nog niks gepland'}
+                </span>
+              </button>
+              <button className="home-tile" style={{ '--card-color': '#f8dfd2' } as CSSProperties} onClick={() => onNavigate('groceries')}>
+                <span className="home-tile-head">🛒 Boodschappen</span>
+                <span className="home-tile-main">
+                  {openGroceries.length === 0 ? 'Niks nodig' : `${openGroceries.length} te halen`}
+                </span>
+                {openGroceries.length > 0 && (
+                  <span className="home-tile-sub">{openGroceries.slice(0, 4).map((g) => g.text).join(', ')}</span>
+                )}
+              </button>
+            </div>
+
+            <SectionCard
+              color="#d4ece4"
+              title="✅ Taken"
+              className="home-card"
+              aside={
+                <button className="link-button home-more" onClick={() => onNavigate('tasks')}>
+                  {openTasks.length} open{lateCount ? ` · ${lateCount} te laat` : ''} ›
+                </button>
+              }
+            >
+              {topTasks.length === 0 ? (
+                <p className="settings-note section-card-pad" style={{ marginBottom: 0 }}>
+                  Alles gedaan! 🎉
+                </p>
+              ) : (
+                topTasks.map((t) => {
+                  const late = isTaskLate(t, now);
+                  const group = findTaskGroup(t.category);
+                  return (
+                    <div key={t.id} className={`task-row${late ? ' late' : ''}`}>
+                      <button
+                        className="task-checkbox"
+                        onClick={() => user && toggleTaskDone(householdId, user.uid, t)}
+                        aria-label="Markeer als gedaan"
+                      />
+                      <div className="task-info">
+                        <p className="task-title">
+                          {group && <span className="task-emoji">{group.emoji}</span>}
+                          {t.title}
+                        </p>
+                        {late && <p className="task-meta task-late-text">te laat</p>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </SectionCard>
+
+            <button className="home-cat" onClick={() => onNavigate('cat')}>
+              <span className="home-cat-emoji">🐈‍⬛</span>
+              <span className="task-info">
+                <span className="task-title" style={{ display: 'block' }}>
+                  {cat.mood === 'hungry'
+                    ? `${catName} heeft honger!`
+                    : cat.mood === 'happy'
+                      ? `${catName} is superblij`
+                      : cat.mood === 'content'
+                        ? `${catName} is tevreden`
+                        : `${catName} verveelt zich`}
+                </span>
+                <span className="stat-track" style={{ display: 'block', marginTop: 6 }}>
+                  <span className={`stat-fill${cat.fullness < 25 ? ' warn' : ''}`} style={{ display: 'block', width: `${cat.fullness}%` }} />
+                </span>
+              </span>
+              <span className="home-more">›</span>
+            </button>
+
+          </div>
+          <div className="home-board">
+            {/* Post-it board: replaces the chat */}
+            <div className="board-head">
+              <p className="section-label" style={{ margin: 0 }}>📌 Prikbord</p>
+              <button className="btn btn-primary board-add" onClick={() => setWriting(true)}>
+                + Briefje
+              </button>
+            </div>
+            {notes.length === 0 && <p className="empty-state" style={{ padding: '20px' }}>Nog geen briefjes. Plak de eerste!</p>}
+            <div className="board">
+              {notes.map((n) => (
+                <PostIt key={n.id} note={n} mine={n.senderId === user?.uid} now={now} householdId={householdId} />
+              ))}
+            </div>
+            {notes.length >= 12 && !showAllNotes && (
+              <button className="link-button" style={{ display: 'block', margin: '8px auto 0' }} onClick={() => setShowAllNotes(true)}>
+                Alle briefjes
+              </button>
+            )}
+          </div>
         </div>
-        {notes.length === 0 && <p className="empty-state" style={{ padding: '20px' }}>Nog geen briefjes. Plak de eerste!</p>}
-        <div className="board">
-          {notes.map((n) => (
-            <PostIt key={n.id} note={n} mine={n.senderId === user?.uid} now={now} householdId={householdId} />
-          ))}
-        </div>
-        {notes.length >= 12 && !showAllNotes && (
-          <button className="link-button" style={{ display: 'block', margin: '8px auto 0' }} onClick={() => setShowAllNotes(true)}>
-            Alle briefjes
-          </button>
-        )}
       </div>
 
       {writing && <NoteComposer onClose={() => setWriting(false)} />}

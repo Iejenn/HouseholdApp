@@ -110,56 +110,59 @@ export default function WeekMenuScreen() {
       </div>
 
       <div className="app-content">
-        {planned.map(({ key, plan }, i) => {
-          const date = addDays(monday, i);
-          const isToday = key === todayKey;
-          return (
-            <div key={key} className={`day-card day-${key}${isToday ? ' today' : ''}`}>
-              <div className="day-head">
-                <span className="day-name">{DAY_NAMES[key]}</span>
-                <span className="day-date">{shortDate(date)}</span>
-                {isToday && <span className="day-today">Vandaag</span>}
-              </div>
-              <button className="day-body" onClick={() => setPicking(key)}>
-                {plan.kind === 'recipe' && (
-                  <>
-                    <span className="day-dish">
-                      {plan.recipe.name}
-                      {plan.isDefault && <span className="day-default"> · vaste {DAY_NAMES[key].toLowerCase()}</span>}
-                    </span>
-                    <span className="day-ingredients">
-                      {plan.recipe.ingredients.join(', ') || 'Geen ingrediënten ingevuld'}
-                    </span>
-                  </>
-                )}
-                {plan.kind === 'default-missing' && (
-                  <>
-                    <span className="day-dish">{plan.name} 🍟</span>
-                    <span className="day-ingredients">
-                      Tip: maak een gerecht "{plan.name}" aan voor de ingrediënten
-                    </span>
-                  </>
-                )}
-                {plan.kind === 'deleted' && <span className="day-empty">Gerecht is verwijderd — kies opnieuw</span>}
-                {plan.kind === 'none' && <span className="day-empty">+ Kies een gerecht</span>}
-              </button>
-              {plan.kind === 'recipe' && (
-                <div className="day-buttons">
-                  <button
-                    className="btn btn-secondary day-btn"
-                    onClick={() => sendToGroceries(key, plan.recipe.ingredients)}
-                    disabled={busy !== null || plan.recipe.ingredients.length === 0}
-                  >
-                    {busy === key ? '…' : '🛒 Naar boodschappen'}
-                  </button>
-                  <button className="btn btn-ghost day-btn" onClick={() => setDay(key, null)}>
-                    Wissen
-                  </button>
+        {/* A grid of day cards on wide screens, one column on phones */}
+        <div className="day-grid">
+          {planned.map(({ key, plan }, i) => {
+            const date = addDays(monday, i);
+            const isToday = key === todayKey;
+            return (
+              <div key={key} className={`day-card day-${key}${isToday ? ' today' : ''}`}>
+                <div className="day-head">
+                  <span className="day-name">{DAY_NAMES[key]}</span>
+                  <span className="day-date">{shortDate(date)}</span>
+                  {isToday && <span className="day-today">Vandaag</span>}
                 </div>
-              )}
-            </div>
-          );
-        })}
+                <button className="day-body" onClick={() => setPicking(key)}>
+                  {plan.kind === 'recipe' && (
+                    <>
+                      <span className="day-dish">
+                        {plan.recipe.name}
+                        {plan.isDefault && <span className="day-default"> · vaste {DAY_NAMES[key].toLowerCase()}</span>}
+                      </span>
+                      <span className="day-ingredients">
+                        {plan.recipe.ingredients.join(', ') || 'Geen ingrediënten ingevuld'}
+                      </span>
+                    </>
+                  )}
+                  {plan.kind === 'default-missing' && (
+                    <>
+                      <span className="day-dish">{plan.name} 🍟</span>
+                      <span className="day-ingredients">
+                        Tip: maak een gerecht "{plan.name}" aan voor de ingrediënten
+                      </span>
+                    </>
+                  )}
+                  {plan.kind === 'deleted' && <span className="day-empty">Gerecht is verwijderd — kies opnieuw</span>}
+                  {plan.kind === 'none' && <span className="day-empty">+ Kies een gerecht</span>}
+                </button>
+                {plan.kind === 'recipe' && (
+                  <div className="day-buttons">
+                    <button
+                      className="btn btn-secondary day-btn"
+                      onClick={() => sendToGroceries(key, plan.recipe.ingredients)}
+                      disabled={busy !== null || plan.recipe.ingredients.length === 0}
+                    >
+                      {busy === key ? '…' : '🛒 Naar boodschappen'}
+                    </button>
+                    <button className="btn btn-ghost day-btn" onClick={() => setDay(key, null)}>
+                      Wissen
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Hidden while choosing a dish, so it doesn't cover the list */}

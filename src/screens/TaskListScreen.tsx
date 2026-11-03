@@ -227,37 +227,40 @@ export default function TaskListScreen() {
           </p>
         )}
 
-        {/* One card per room, with a coloured header like the week menu */}
-        {sections.map(({ groupId, tasks: groupTasks }) => {
-          const group = findTaskGroup(groupId);
-          const lateCount = groupTasks.filter((t) => isTaskLate(t, now)).length;
-          return (
+        {/* Side-by-side columns on wide screens */}
+        <div className="card-columns">
+          {/* One card per room, with a coloured header like the week menu */}
+          {sections.map(({ groupId, tasks: groupTasks }) => {
+            const group = findTaskGroup(groupId);
+            const lateCount = groupTasks.filter((t) => isTaskLate(t, now)).length;
+            return (
+              <SectionCard
+                key={groupId ?? 'overig'}
+                color={group?.color ?? OTHER_GROUP_COLOR}
+                title={group ? `${group.emoji} ${group.label}` : '📌 Overig'}
+                aside={
+                  <span className={`section-count${lateCount ? ' late' : ''}`}>
+                    {lateCount ? `${lateCount} te laat · ` : ''}
+                    {groupTasks.length}
+                  </span>
+                }
+              >
+                {groupTasks.map((t) => renderTask(t, false))}
+              </SectionCard>
+            );
+          })}
+
+          {done.length > 0 && (
             <SectionCard
-              key={groupId ?? 'overig'}
-              color={group?.color ?? OTHER_GROUP_COLOR}
-              title={group ? `${group.emoji} ${group.label}` : '📌 Overig'}
-              aside={
-                <span className={`section-count${lateCount ? ' late' : ''}`}>
-                  {lateCount ? `${lateCount} te laat · ` : ''}
-                  {groupTasks.length}
-                </span>
-              }
+              color="#e9e6e0"
+              title="✓ Gedaan"
+              aside={<span className="section-count">{done.length}</span>}
             >
-              {groupTasks.map((t) => renderTask(t, false))}
+              {done.map((t) => renderTask(t, true))}
             </SectionCard>
-          );
-        })}
-
-        {done.length > 0 && (
-          <SectionCard
-            color="#e9e6e0"
-            title="✓ Gedaan"
-            aside={<span className="section-count">{done.length}</span>}
-          >
-            {done.map((t) => renderTask(t, true))}
-          </SectionCard>
-        )}
-
+          )}
+        </div>
+        
         {tasks.length > 0 && (
           <p className="swipe-hint">
             Swipe naar rechts om te verwijderen, naar links om te bewerken of te porren

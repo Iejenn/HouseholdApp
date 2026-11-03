@@ -62,7 +62,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <div className="app-content">
+      <div className="app-content narrow-content">
         {visible.length === 0 && (
           <p className="empty-state">
             🍝

@@ -96,7 +96,7 @@ export default function SettingsScreen() {
         </div>
       </div>
 
-      <div className="app-content">
+      <div className="app-content narrow-content">
         <div className="card" style={{ marginBottom: 16 }}>
           <p className="card-title">🔔 Push-meldingen op deze telefoon</p>
 

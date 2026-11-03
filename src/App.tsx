@@ -108,16 +108,20 @@ function MainShell() {
   return (
     <HouseholdProvider>
       <div className="app-shell">
-        {/* key={tab}: switching tabs clears a crash, so one broken screen
-            never locks you out of the rest of the app */}
-        <ErrorBoundary key={tab}>
-          {tab === 'home' && <HomeScreen onNavigate={setTab} />}
-          {tab === 'tasks' && <TaskListScreen />}
-          {tab === 'groceries' && <GroceriesScreen />}
-          {tab === 'menu' && <WeekMenuScreen />}
-          {tab === 'cat' && <CatScreen />}
-          {tab === 'settings' && <SettingsScreen />}
-        </ErrorBoundary>
+        {/* Own container for the screen, so on tablets/desktops the tab bar
+            can sit next to it as a sidebar */}
+        <main className="app-main">
+          {/* key={tab}: switching tabs clears a crash, so one broken screen
+              never locks you out of the rest of the app */}
+          <ErrorBoundary key={tab}>
+            {tab === 'home' && <HomeScreen onNavigate={setTab} />}
+            {tab === 'tasks' && <TaskListScreen />}
+            {tab === 'groceries' && <GroceriesScreen />}
+            {tab === 'menu' && <WeekMenuScreen />}
+            {tab === 'cat' && <CatScreen />}
+            {tab === 'settings' && <SettingsScreen />}
+          </ErrorBoundary>
+        </main>
         {/* Settings moved out of the tab bar to make room for Weekmenu */}
         <button
           className={`settings-btn${tab === 'settings' ? ' active' : ''}`}

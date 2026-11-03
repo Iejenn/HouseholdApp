@@ -163,39 +163,41 @@ export default function GroceriesScreen() {
           </p>
         )}
 
-        {/* Same card look as the week menu */}
-        {open.length > 0 && (
-          <SectionCard color="#f8dfd2" title="🛒 Te halen" aside={<span className="section-count">{open.length}</span>}>
-            {open.map((item) => (
-              <GroceryRow
-                key={item.id}
-                item={item}
-                meta={`door ${memberNames[item.addedBy] ?? '…'}`}
-                onToggle={() => toggleChecked(item)}
-                onRemove={() => swipe.remove(item)}
-              />
-            ))}
-          </SectionCard>
-        )}
+        <div className="card-grid">
+          {/* Same card look as the week menu */}
+          {open.length > 0 && (
+            <SectionCard color="#f8dfd2" title="🛒 Te halen" aside={<span className="section-count">{open.length}</span>}>
+              {open.map((item) => (
+                <GroceryRow
+                  key={item.id}
+                  item={item}
+                  meta={`door ${memberNames[item.addedBy] ?? '…'}`}
+                  onToggle={() => toggleChecked(item)}
+                  onRemove={() => swipe.remove(item)}
+                />
+              ))}
+            </SectionCard>
+          )}
 
-        {checked.length > 0 && (
-          <SectionCard
-            color="#e9e6e0"
-            title="🧺 In het mandje"
-            aside={<span className="section-count">{checked.length}</span>}
-          >
-            {checked.map((item) => (
-              <GroceryRow
-                key={item.id}
-                item={item}
-                meta={`gehaald door ${memberNames[item.checkedBy ?? ''] ?? '…'}`}
-                onToggle={() => toggleChecked(item)}
-                onRemove={() => swipe.remove(item)}
-              />
-            ))}
-          </SectionCard>
-        )}
-
+          {checked.length > 0 && (
+            <SectionCard
+              color="#e9e6e0"
+              title="🧺 In het mandje"
+              aside={<span className="section-count">{checked.length}</span>}
+            >
+              {checked.map((item) => (
+                <GroceryRow
+                  key={item.id}
+                  item={item}
+                  meta={`gehaald door ${memberNames[item.checkedBy ?? ''] ?? '…'}`}
+                  onToggle={() => toggleChecked(item)}
+                  onRemove={() => swipe.remove(item)}
+                />
+              ))}
+            </SectionCard>
+          )}
+        </div>
+        
         {items.length > 0 && (
           <p className="swipe-hint">Swipe naar rechts om iets van de lijst te halen</p>
         )}

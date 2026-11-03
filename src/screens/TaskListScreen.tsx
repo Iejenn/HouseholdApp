@@ -20,13 +20,13 @@ import SwipeToDelete from '../components/SwipeToDelete';
 import UndoToast from '../components/UndoToast';
 import { useUndoableDelete } from '../hooks/useUndoableDelete';
 import { nudgeTask } from '../lib/push';
-import { TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
+import { toggleTaskDone } from '../lib/tasks';
+import { OTHER_GROUP_COLOR, TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
+import SectionCard from '../components/SectionCard';
 import { formatAgo, isHiddenDone, isTaskDone, isTaskLate } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
-import type { Completion, Recurrence, RecurrenceUnit, Task } from '../types';
+import type { Recurrence, RecurrenceUnit, Task } from '../types';
 
-// Every check-off earns the household this many cat points
-const POINTS_PER_TASK = 1;
 
 const UNIT_LABELS: Record<RecurrenceUnit, [string, string]> = {
   day: ['dag', 'dagen'],
@@ -71,43 +71,12 @@ export default function TaskListScreen() {
 
   async function toggleComplete(task: Task) {
     if (!user) return;
-    const ref = doc(db, 'households', householdId, 'tasks', task.id);
-    const completionsCol = collection(db, 'households', householdId, 'completions');
-    // Task update and point record are written together, so you can't get
-    // a point without the task actually being checked off (and vice versa)
-    const batch = writeBatch(db);
-    if (isTaskDone(task, Date.now())) {
-      // Unchecking: put back the check-off before this one (keeps "laatst gedaan")
-      batch.update(ref, {
-        completedAt: task.previousCompletedAt ?? null,
-        completedBy: task.previousCompletedBy ?? null,
-        previousCompletedAt: null,
-        previousCompletedBy: null,
-      });
-      // ...and take the point back
-      batch.delete(doc(completionsCol, `${task.id}_${task.completedAt}`));
-    } else {
-      // Also used when a recurring task comes back: the old completion stays,
-      // so every round earns a point
-      const completedAt = Date.now();
-      batch.update(ref, {
-        completedAt,
-        completedBy: user.uid,
-        previousCompletedAt: task.completedAt ?? null,
-        previousCompletedBy: task.completedBy ?? null,
-        hearts: [],
-      });
-      const completion: Completion = {
-        taskId: task.id,
-        uid: user.uid,
-        points: POINTS_PER_TASK,
-        completedAt,
-      };
-      batch.set(doc(completionsCol, `${task.id}_${completedAt}`), completion);
+    // Show the +1 straight away; the write itself is in lib/tasks
+    if (!isTaskDone(task, Date.now())) {
       setPointPopId(task.id);
       window.setTimeout(() => setPointPopId((cur) => (cur === task.id ? null : cur)), 900);
     }
-    await batch.commit();
+    await toggleTaskDone(householdId, user.uid, task);
   }
 
   async function toggleHeart(task: Task) {
@@ -258,31 +227,35 @@ export default function TaskListScreen() {
           </p>
         )}
 
+        {/* One card per room, with a coloured header like the week menu */}
         {sections.map(({ groupId, tasks: groupTasks }) => {
           const group = findTaskGroup(groupId);
           const lateCount = groupTasks.filter((t) => isTaskLate(t, now)).length;
           return (
-            <section key={groupId ?? 'overig'} className="task-section">
-              <p className="section-label task-section-label">
-                <span>{group ? `${group.emoji} ${group.label}` : '📌 Overig'}</span>
+            <SectionCard
+              key={groupId ?? 'overig'}
+              color={group?.color ?? OTHER_GROUP_COLOR}
+              title={group ? `${group.emoji} ${group.label}` : '📌 Overig'}
+              aside={
                 <span className={`section-count${lateCount ? ' late' : ''}`}>
                   {lateCount ? `${lateCount} te laat · ` : ''}
                   {groupTasks.length}
                 </span>
-              </p>
+              }
+            >
               {groupTasks.map((t) => renderTask(t, false))}
-            </section>
+            </SectionCard>
           );
         })}
 
         {done.length > 0 && (
-          <section className="task-section">
-            <p className="section-label task-section-label">
-              <span>✓ Gedaan</span>
-              <span className="section-count">{done.length}</span>
-            </p>
+          <SectionCard
+            color="#e9e6e0"
+            title="✓ Gedaan"
+            aside={<span className="section-count">{done.length}</span>}
+          >
             {done.map((t) => renderTask(t, true))}
-          </section>
+          </SectionCard>
         )}
 
         {tasks.length > 0 && (

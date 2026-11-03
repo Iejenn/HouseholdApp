@@ -1,0 +1,422 @@
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+import { useAuth } from '../context/AuthContext';
+import { useHousehold } from '../context/HouseholdContext';
+import { useNow } from '../hooks/useNow';
+import { useRecipes } from '../hooks/useRecipes';
+import SectionCard from '../components/SectionCard';
+import WeatherLocationPicker from '../components/WeatherLocationPicker';
+import { computeCat } from '../data/catShop';
+import { findTaskGroup } from '../data/taskCatalog';
+import { describeWeather, fetchForecast } from '../lib/weather';
+import type { Forecast } from '../lib/weather';
+import { resolveDay } from '../lib/menu';
+import { DAY_KEYS, weekId } from '../lib/week';
+import { isTaskDone, isTaskLate } from '../lib/time';
+import { toggleTaskDone } from '../lib/tasks';
+import { dutchError } from '../lib/firebaseErrors';
+import type { GroceryItem, Task, WeekMenu } from '../types';
+
+export type HomeTarget = 'tasks' | 'groceries' | 'menu' | 'cat';
+
+const WEEKDAYS = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+const SHORT_DAYS = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+
+// Post-it colours to pick from
+const NOTE_COLORS = ['#fdf0a6', '#fbd3dc', '#cfe6f7', '#d6efd0', '#fde0c2'];
+
+interface Note {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  createdAt: number;
+  color?: string;
+}
+
+function greeting(hour: number): string {
+  if (hour < 6) return 'Goedenacht';
+  if (hour < 12) return 'Goedemorgen';
+  if (hour < 18) return 'Goedemiddag';
+  return 'Goedenavond';
+}
+
+function shortAgo(ms: number, now: number): string {
+  const mins = Math.floor((now - ms) / 60000);
+  if (mins < 1) return 'zojuist';
+  if (mins < 60) return `${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} u`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'gisteren' : `${days} dagen`;
+}
+
+// Small, stable tilt per note, so the board looks hand-stuck
+function tilt(id: string): number {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return ((Math.abs(h) % 7) - 3) * 0.8;
+}
+
+// Home: today at a glance plus the post-it board (which replaces the chat)
+export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget) => void }) {
+  const { user, profile } = useAuth();
+  const { householdId, household, purchases } = useHousehold();
+  const recipes = useRecipes(householdId);
+  const now = useNow();
+  const today = new Date(now);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [groceries, setGroceries] = useState<GroceryItem[]>([]);
+  const [menu, setMenu] = useState<WeekMenu | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [showAllNotes, setShowAllNotes] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [forecast, setForecast] = useState<Forecast | null>(null);
+  const [weatherError, setWeatherError] = useState(false);
+  const [pickingPlace, setPickingPlace] = useState(false);
+
+  useEffect(() => {
+    const unsubs = [
+      onSnapshot(collection(db, 'households', householdId, 'tasks'), (snap) =>
+        setTasks(snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id })))
+      ),
+      onSnapshot(collection(db, 'households', householdId, 'groceries'), (snap) =>
+        setGroceries(snap.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id })))
+      ),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [householdId]);
+
+  const thisWeek = weekId(today);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'households', householdId, 'weekMenus', thisWeek), (snap) =>
+      setMenu(snap.exists() ? (snap.data() as WeekMenu) : { days: {}, updatedAt: 0 })
+    );
+    return unsub;
+  }, [householdId, thisWeek]);
+
+  // The post-its are the old chat messages, newest first
+  useEffect(() => {
+    const q = query(
+      collection(db, 'households', householdId, 'messages'),
+      orderBy('createdAt', 'desc'),
+      limit(showAllNotes ? 60 : 12)
+    );
+    const unsub = onSnapshot(q, (snap) =>
+      setNotes(
+        snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            senderId: data.senderId,
+            senderName: data.senderName ?? 'Iemand',
+            text: data.text ?? '',
+            // Just-sent notes have no server time yet
+            createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
+            color: data.color,
+          };
+        })
+      )
+    );
+    return unsub;
+  }, [householdId, showAllNotes]);
+
+  const location = household?.location;
+  useEffect(() => {
+    if (!location) return;
+    setWeatherError(false);
+    fetchForecast(location)
+      .then(setForecast)
+      .catch(() => setWeatherError(true));
+  }, [location?.lat, location?.lon]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const name = profile?.displayName ?? '';
+  const todayKey = DAY_KEYS[(today.getDay() + 6) % 7];
+  const tonight = resolveDay(todayKey, menu, recipes);
+
+  const openTasks = tasks.filter((t) => !isTaskDone(t, now));
+  const lateCount = openTasks.filter((t) => isTaskLate(t, now)).length;
+  // Late first, then the ones assigned to you, then the rest
+  const topTasks = [...openTasks]
+    .sort(
+      (a, b) =>
+        Number(isTaskLate(b, now)) - Number(isTaskLate(a, now)) ||
+        Number(b.assignedTo === user?.uid) - Number(a.assignedTo === user?.uid)
+    )
+    .slice(0, 3);
+  const openGroceries = groceries.filter((g) => !g.checkedAt).sort((a, b) => b.createdAt - a.createdAt);
+  const cat = computeCat(purchases, now);
+  const catName = household?.catName?.trim() || 'Poes';
+  const todayWeather = forecast ? describeWeather(forecast.currentCode) : null;
+
+  return (
+    <>
+      <div className="app-header">
+        <div>
+          <h2 className="household-name">
+            {greeting(today.getHours())}
+            {name ? `, ${name}` : ''}
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 2 }}>
+            {WEEKDAYS[today.getDay()]} {today.getDate()} {MONTHS[today.getMonth()]}
+            {forecast && todayWeather && ` · ${todayWeather.emoji} ${forecast.currentTemp}° · ${forecast.days[0].max}° / ${forecast.days[0].min}°`}
+          </p>
+        </div>
+      </div>
+
+      <div className="app-content">
+        {/* Weather: 7 days, or ask where once */}
+        {location && forecast && (
+          <div className="weather-strip">
+            {forecast.days.map((d, i) => {
+              const w = describeWeather(d.code);
+              const date = new Date(`${d.date}T12:00:00`);
+              return (
+                <div key={d.date} className={`weather-day${i === 0 ? ' today' : ''}`}>
+                  <span className="weather-name">{i === 0 ? 'Vandaag' : SHORT_DAYS[date.getDay()]}</span>
+                  <span className="weather-emoji">{w.emoji}</span>
+                  <span className="weather-temp">
+                    <strong>{d.max}°</strong> {d.min}°
+                  </span>
+                  <span className={`weather-rain${d.rain >= 40 ? ' wet' : ''}`}>💧{d.rain}%</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {location && weatherError && <p className="settings-note">Het weer kon niet geladen worden.</p>}
+        {!location && (
+          <SectionCard color="#dbe8f5" title="🌤️ Weer" className="home-card">
+            <div className="section-card-pad">
+              {pickingPlace ? (
+                <WeatherLocationPicker onDone={() => setPickingPlace(false)} />
+              ) : (
+                <button className="btn btn-secondary btn-block" onClick={() => setPickingPlace(true)}>
+                  Weer instellen
+                </button>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
+        <div className="home-grid">
+          <button className="home-tile" style={{ '--card-color': '#f8ecc4' } as CSSProperties} onClick={() => onNavigate('menu')}>
+            <span className="home-tile-head">🍽️ Vanavond</span>
+            <span className="home-tile-main">
+              {tonight.kind === 'recipe'
+                ? tonight.recipe.name
+                : tonight.kind === 'default-missing'
+                  ? `${tonight.name} 🍟`
+                  : 'Nog niks gepland'}
+            </span>
+          </button>
+          <button className="home-tile" style={{ '--card-color': '#f8dfd2' } as CSSProperties} onClick={() => onNavigate('groceries')}>
+            <span className="home-tile-head">🛒 Boodschappen</span>
+            <span className="home-tile-main">
+              {openGroceries.length === 0 ? 'Niks nodig' : `${openGroceries.length} te halen`}
+            </span>
+            {openGroceries.length > 0 && (
+              <span className="home-tile-sub">{openGroceries.slice(0, 4).map((g) => g.text).join(', ')}</span>
+            )}
+          </button>
+        </div>
+
+        <SectionCard
+          color="#d4ece4"
+          title="✅ Taken"
+          className="home-card"
+          aside={
+            <button className="link-button home-more" onClick={() => onNavigate('tasks')}>
+              {openTasks.length} open{lateCount ? ` · ${lateCount} te laat` : ''} ›
+            </button>
+          }
+        >
+          {topTasks.length === 0 ? (
+            <p className="settings-note section-card-pad" style={{ marginBottom: 0 }}>
+              Alles gedaan! 🎉
+            </p>
+          ) : (
+            topTasks.map((t) => {
+              const late = isTaskLate(t, now);
+              const group = findTaskGroup(t.category);
+              return (
+                <div key={t.id} className={`task-row${late ? ' late' : ''}`}>
+                  <button
+                    className="task-checkbox"
+                    onClick={() => user && toggleTaskDone(householdId, user.uid, t)}
+                    aria-label="Markeer als gedaan"
+                  />
+                  <div className="task-info">
+                    <p className="task-title">
+                      {group && <span className="task-emoji">{group.emoji}</span>}
+                      {t.title}
+                    </p>
+                    {late && <p className="task-meta task-late-text">te laat</p>}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </SectionCard>
+
+        <button className="home-cat" onClick={() => onNavigate('cat')}>
+          <span className="home-cat-emoji">🐈‍⬛</span>
+          <span className="task-info">
+            <span className="task-title" style={{ display: 'block' }}>
+              {cat.mood === 'hungry'
+                ? `${catName} heeft honger!`
+                : cat.mood === 'happy'
+                  ? `${catName} is superblij`
+                  : cat.mood === 'content'
+                    ? `${catName} is tevreden`
+                    : `${catName} verveelt zich`}
+            </span>
+            <span className="stat-track" style={{ display: 'block', marginTop: 6 }}>
+              <span className={`stat-fill${cat.fullness < 25 ? ' warn' : ''}`} style={{ display: 'block', width: `${cat.fullness}%` }} />
+            </span>
+          </span>
+          <span className="home-more">›</span>
+        </button>
+
+        {/* Post-it board: replaces the chat */}
+        <div className="board-head">
+          <p className="section-label" style={{ margin: 0 }}>📌 Prikbord</p>
+          <button className="btn btn-primary board-add" onClick={() => setWriting(true)}>
+            + Briefje
+          </button>
+        </div>
+        {notes.length === 0 && <p className="empty-state" style={{ padding: '20px' }}>Nog geen briefjes. Plak de eerste!</p>}
+        <div className="board">
+          {notes.map((n) => (
+            <PostIt key={n.id} note={n} mine={n.senderId === user?.uid} now={now} householdId={householdId} />
+          ))}
+        </div>
+        {notes.length >= 12 && !showAllNotes && (
+          <button className="link-button" style={{ display: 'block', margin: '8px auto 0' }} onClick={() => setShowAllNotes(true)}>
+            Alle briefjes
+          </button>
+        )}
+      </div>
+
+      {writing && <NoteComposer onClose={() => setWriting(false)} />}
+    </>
+  );
+}
+
+// One post-it. Hold your own note to take it off the board.
+function PostIt({ note, mine, now, householdId }: { note: Note; mine: boolean; now: number; householdId: string }) {
+  const timer = useRef<number | null>(null);
+
+  function startHold() {
+    if (!mine) return;
+    timer.current = window.setTimeout(() => {
+      if (window.confirm('Dit briefje van het prikbord halen?')) {
+        deleteDoc(doc(db, 'households', householdId, 'messages', note.id)).catch((err) =>
+          console.error('Failed to delete note', err)
+        );
+      }
+    }, 550);
+  }
+  function cancelHold() {
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = null;
+  }
+
+  return (
+    <div
+      className="postit"
+      style={{ background: note.color ?? NOTE_COLORS[0], transform: `rotate(${tilt(note.id)}deg)` }}
+      onTouchStart={startHold}
+      onTouchEnd={cancelHold}
+      onTouchMove={cancelHold}
+      onMouseDown={startHold}
+      onMouseUp={cancelHold}
+      onMouseLeave={cancelHold}
+      onContextMenu={(e) => mine && e.preventDefault()}
+    >
+      <span className="postit-pin" aria-hidden>📌</span>
+      <p className="postit-text">{note.text}</p>
+      <p className="postit-meta">
+        — {note.senderName} · {shortAgo(note.createdAt, now)}
+      </p>
+    </div>
+  );
+}
+
+function NoteComposer({ onClose }: { onClose: () => void }) {
+  const { user, profile } = useAuth();
+  const { householdId } = useHousehold();
+  const [text, setText] = useState('');
+  const [color, setColor] = useState(NOTE_COLORS[0]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function stick() {
+    if (!user || !profile || !text.trim()) return;
+    setBusy(true);
+    try {
+      // Same shape as the old chat messages (+ a colour), so notifications
+      // and the existing rules keep working unchanged
+      await addDoc(collection(db, 'households', householdId, 'messages'), {
+        senderId: user.uid,
+        senderName: profile.displayName,
+        text: text.trim(),
+        color,
+        createdAt: serverTimestamp(),
+      });
+      onClose();
+    } catch (err) {
+      setError(dutchError(err, 'Plakken lukte niet.'));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">Nieuw briefje</h3>
+        <textarea
+          className="input postit-input"
+          style={{ background: color }}
+          placeholder="Schrijf iets liefs, of: vergeet de pakketjes niet!"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={300}
+          rows={4}
+          autoFocus
+        />
+        <div className="chip-row" style={{ margin: '10px 0 14px' }}>
+          {NOTE_COLORS.map((c) => (
+            <button
+              key={c}
+              className={`color-dot${c === color ? ' active' : ''}`}
+              style={{ background: c }}
+              onClick={() => setColor(c)}
+              aria-label="Kleur kiezen"
+            />
+          ))}
+        </div>
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+        <button className="btn btn-primary btn-block" onClick={stick} disabled={busy || !text.trim()} style={{ marginBottom: 8 }}>
+          {busy ? 'Even geduld…' : '📌 Opplakken'}
+        </button>
+        <button className="btn btn-ghost btn-block" onClick={onClose}>
+          Annuleren
+        </button>
+      </div>
+    </div>
+  );
+}

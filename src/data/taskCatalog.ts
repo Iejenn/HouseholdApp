@@ -9,6 +9,8 @@ export interface TaskGroup {
   items: string[];
   // How a picked item becomes the task title
   title: (item: string, label: string) => string;
+  // Header colour of this room's card in the task list (pastel, like the week menu)
+  color: string;
 }
 
 const FLOORS = ['Begane grond', 'Eerste verdieping', 'Zolder'];
@@ -18,8 +20,8 @@ const labelThenItem = (item: string, label: string) => `${label} – ${item}`;
 const itemThenLabel = (item: string, label: string) => `${item} – ${label}`;
 
 export const TASK_GROUPS: TaskGroup[] = [
-  { id: 'stofzuigen', label: 'Stofzuigen', emoji: '🧹', items: FLOORS, title: labelThenItem },
-  { id: 'dweilen', label: 'Dweilen', emoji: '🪣', items: FLOORS, title: labelThenItem },
+  { id: 'stofzuigen', label: 'Stofzuigen', emoji: '🧹', items: FLOORS, title: labelThenItem, color: '#dbe8f5' },
+  { id: 'dweilen', label: 'Dweilen', emoji: '🪣', items: FLOORS, title: labelThenItem, color: '#d4ece4' },
   {
     id: 'badkamer',
     label: 'Badkamer',
@@ -32,6 +34,7 @@ export const TASK_GROUPS: TaskGroup[] = [
       'Handdoeken verschonen',
     ],
     title: itemOnly,
+    color: '#e6ddf3',
   },
   {
     id: 'keuken',
@@ -47,6 +50,7 @@ export const TASK_GROUPS: TaskGroup[] = [
       'Oven schoonmaken',
     ],
     title: itemOnly,
+    color: '#f8dfd2',
   },
   {
     id: 'woonkamer',
@@ -54,6 +58,7 @@ export const TASK_GROUPS: TaskGroup[] = [
     emoji: '🛋️',
     items: ['Afstoffen', 'Opruimen', 'Ramen lappen', 'Planten water geven'],
     title: itemThenLabel,
+    color: '#f8ecc4',
   },
   {
     id: 'slaapkamer',
@@ -61,6 +66,7 @@ export const TASK_GROUPS: TaskGroup[] = [
     emoji: '🛏️',
     items: ['Bed verschonen', 'Bed opmaken', 'Afstoffen', 'Opruimen'],
     title: itemThenLabel,
+    color: '#f6dbe4',
   },
   {
     id: 'was',
@@ -68,6 +74,7 @@ export const TASK_GROUPS: TaskGroup[] = [
     emoji: '🧺',
     items: ['Was draaien', 'Was ophangen', 'Was opvouwen', 'Strijken'],
     title: itemOnly,
+    color: '#dcefd9',
   },
   {
     id: 'afval',
@@ -81,6 +88,7 @@ export const TASK_GROUPS: TaskGroup[] = [
       'Glas wegbrengen',
     ],
     title: itemOnly,
+    color: '#e4e2dd',
   },
   {
     id: 'tuin',
@@ -88,8 +96,12 @@ export const TASK_GROUPS: TaskGroup[] = [
     emoji: '🌿',
     items: ['Planten water geven', 'Gras maaien', 'Onkruid wieden', 'Terras vegen'],
     title: itemThenLabel,
+    color: '#e2efcf',
   },
 ];
+
+// Card colour for tasks without a room
+export const OTHER_GROUP_COLOR = '#efe6da';
 
 export function findTaskGroup(id: string | null | undefined): TaskGroup | undefined {
   return id ? TASK_GROUPS.find((g) => g.id === id) : undefined;

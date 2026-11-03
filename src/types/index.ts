@@ -23,6 +23,13 @@ export interface Household {
   catName?: string;
   // Chosen wallpaper/floor/collar/hat for the cat (ids from data/catShop)
   catLook?: Partial<Record<'wall' | 'floor' | 'collar' | 'hat', string | null>>;
+  // Where the weather on the home screen is for (rounded to ~1 km)
+  location?: WeatherLocation;
+}
+export interface WeatherLocation {
+  lat: number;
+  lon: number;
+  name: string;
 }
 export type RecurrenceUnit = 'day' | 'week' | 'month';
 export interface Recurrence {
@@ -77,14 +84,6 @@ export interface GroceryItem {
   createdAt: number;
   checkedAt: number | null;
   checkedBy: string | null;
-}
-export interface ChatMessage {
-  id: string;
-  householdId: string;
-  senderId: string;
-  senderName: string;
-  text: string;
-  createdAt: number;
 }
 // Recipe library (Gerechten) in households/{id}/recipes
 export interface Recipe {

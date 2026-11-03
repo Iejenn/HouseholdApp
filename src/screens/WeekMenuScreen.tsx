@@ -8,32 +8,9 @@ import { useRecipes } from '../hooks/useRecipes';
 import RecipesScreen, { RecipeEditor } from './RecipesScreen';
 import { DAY_KEYS, DAY_NAMES, addDays, mondayOf, shortDate, weekId, weekRangeLabel } from '../lib/week';
 import { addIngredientsToGroceries, addResultText, groceryKey } from '../lib/groceries';
+import { DEFAULT_DISHES, resolveDay } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
 import type { DayKey, Recipe, WeekMenu } from '../types';
-
-// Friday is chips day unless you pick something else for that week
-const DEFAULT_DISHES: Partial<Record<DayKey, string>> = { fri: 'Patat' };
-
-// What's on the plate for one day, resolved from the stored value
-type Planned =
-  | { kind: 'recipe'; recipe: Recipe; isDefault: boolean }
-  | { kind: 'default-missing'; name: string } // e.g. Patat, but no such recipe yet
-  | { kind: 'deleted' } // picked a recipe that was later removed
-  | { kind: 'none' };
-
-function resolveDay(key: DayKey, menu: WeekMenu | null, recipes: Recipe[]): Planned {
-  const value = menu?.days[key];
-  if (value === null) return { kind: 'none' };
-  if (value !== undefined) {
-    const recipe = recipes.find((r) => r.id === value);
-    return recipe ? { kind: 'recipe', recipe, isDefault: false } : { kind: 'deleted' };
-  }
-  const defaultName = DEFAULT_DISHES[key];
-  if (!defaultName) return { kind: 'none' };
-  // The default links to the library by name, so "Patat" can have its own ingredients
-  const recipe = recipes.find((r) => groceryKey(r.name) === groceryKey(defaultName));
-  return recipe ? { kind: 'recipe', recipe, isDefault: true } : { kind: 'default-missing', name: defaultName };
-}
 
 export default function WeekMenuScreen() {
   const { user } = useAuth();

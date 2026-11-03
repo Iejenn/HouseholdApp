@@ -7,21 +7,21 @@ import TaskListScreen from './screens/TaskListScreen';
 import GroceriesScreen from './screens/GroceriesScreen';
 import WeekMenuScreen from './screens/WeekMenuScreen';
 import CatScreen from './screens/CatScreen';
-import ChatScreen from './screens/ChatScreen';
+import HomeScreen from './screens/HomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { listenForTestPush, refreshPush } from './lib/push';
 import InstallPrompt from './components/InstallPrompt';
 import { ErrorBoundary, GlobalErrorBar } from './components/ErrorBoundary';
 import { HouseholdProvider } from './context/HouseholdContext';
 
-type Tab = 'tasks' | 'groceries' | 'menu' | 'cat' | 'chat' | 'settings';
+type Tab = 'home' | 'tasks' | 'groceries' | 'menu' | 'cat' | 'settings';
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
+  { id: 'home', icon: '🏠', label: 'Thuis' },
   { id: 'tasks', icon: '✅', label: 'Taken' },
   { id: 'groceries', icon: '🛒', label: 'Boodschappen' },
   { id: 'menu', icon: '🍽️', label: 'Weekmenu' },
   { id: 'cat', icon: '🐈‍⬛', label: 'Kat' },
-  { id: 'chat', icon: '💬', label: 'Chat' },
 ];
 
 function isTab(value: unknown): value is Tab {
@@ -29,17 +29,23 @@ function isTab(value: unknown): value is Tab {
   return value === 'settings' || TABS.some((t) => t.id === value);
 }
 
-// A tapped notification opens the app as …/?tab=chat
+// The chat became the post-it board on Home; notifications (and old links)
+// still say "chat", so send those to Home
+function toTab(value: unknown): Tab | null {
+  if (value === 'chat') return 'home';
+  return isTab(value) ? value : null;
+}
+
+// A tapped notification opens the app as …/?tab=groceries
 function tabFromUrl(): Tab {
-  const tab = new URLSearchParams(window.location.search).get('tab');
-  return isTab(tab) ? tab : 'tasks';
+  return toTab(new URLSearchParams(window.location.search).get('tab')) ?? 'home';
 }
 
 function MainShell() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>(tabFromUrl);
   // Where ⚙️ returns to when tapped again
-  const [lastTab, setLastTab] = useState<Tab>('tasks');
+  const [lastTab, setLastTab] = useState<Tab>('home');
 
   function toggleSettings() {
     if (tab === 'settings') setTab(lastTab);
@@ -52,7 +58,8 @@ function MainShell() {
   useEffect(() => {
     // Notification tapped while the app was already open: switch tab
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'open-tab' && isTab(e.data.tab)) setTab(e.data.tab);
+      const next = e.data?.type === 'open-tab' ? toTab(e.data.tab) : null;
+      if (next) setTab(next);
     };
     navigator.serviceWorker?.addEventListener('message', onMessage);
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
@@ -72,11 +79,11 @@ function MainShell() {
         {/* key={tab}: switching tabs clears a crash, so one broken screen
             never locks you out of the rest of the app */}
         <ErrorBoundary key={tab}>
+          {tab === 'home' && <HomeScreen onNavigate={setTab} />}
           {tab === 'tasks' && <TaskListScreen />}
           {tab === 'groceries' && <GroceriesScreen />}
           {tab === 'menu' && <WeekMenuScreen />}
           {tab === 'cat' && <CatScreen />}
-          {tab === 'chat' && <ChatScreen />}
           {tab === 'settings' && <SettingsScreen />}
         </ErrorBoundary>
         {/* Settings moved out of the tab bar to make room for Weekmenu */}

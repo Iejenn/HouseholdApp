@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import type { DocumentReference } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
-import type { GroceryItem } from '../types';
+import type { GroceryItem, Recipe } from '../types';
 
 // Same key for "Ui", " ui " and "UI", so they count as the same thing
 export const groceryKey = (text: string) => text.trim().toLowerCase();
@@ -19,43 +20,79 @@ export function parseIngredients(raw: string): string[] {
   return out;
 }
 
-// Puts ingredients on the grocery list in one go, skipping anything that is
-// already on the list (still open — bought items don't count) or appears
-// twice in the input. One batch: everything is saved, or nothing is.
+// One ingredient to add, with the dish it's for (null when typed by hand)
+export interface IngredientToAdd {
+  text: string;
+  recipe: string | null;
+}
+
+export const fromRecipe = (recipe: Recipe): IngredientToAdd[] =>
+  recipe.ingredients.map((text) => ({ text, recipe: recipe.name }));
+
+// Puts ingredients on the grocery list in one go. Anything already on the
+// list (still open — bought items don't count) isn't added twice: it only
+// gets the dish added to its "voor …" note, so "Ui · voor Risotto, Nasi"
+// tells you to buy enough. One batch: everything is saved, or nothing is.
 export async function addIngredientsToGroceries(
   householdId: string,
   uid: string,
-  ingredients: string[]
+  ingredients: IngredientToAdd[]
 ): Promise<{ added: number; skipped: number }> {
   const col = collection(db, 'households', householdId, 'groceries');
   const openSnap = await getDocs(query(col, where('checkedAt', '==', null)));
-  const have = new Set(openSnap.docs.map((d) => groceryKey((d.data() as GroceryItem).text)));
 
-  const batch = writeBatch(db);
-  const createdAt = Date.now();
+  // Everything per ingredient first, so an ingredient in two dishes of the
+  // same week becomes one item "voor" both
+  const plan = new Map<string, { text: string; ref: DocumentReference | null; had: string[]; recipes: string[] }>();
+  for (const d of openSnap.docs) {
+    const data = d.data() as GroceryItem;
+    const key = groceryKey(data.text);
+    if (!plan.has(key)) plan.set(key, { text: data.text, ref: d.ref, had: data.forRecipes ?? [], recipes: [...(data.forRecipes ?? [])] });
+  }
+
   let added = 0;
   let skipped = 0;
-  for (const raw of ingredients) {
+  const order: string[] = [];
+  for (const { text: raw, recipe } of ingredients) {
     const text = raw.trim();
     if (!text) continue;
     const key = groceryKey(text);
-    if (have.has(key)) {
+    const entry = plan.get(key);
+    if (entry) {
       skipped++;
+      if (recipe && !entry.recipes.includes(recipe)) entry.recipes.push(recipe);
       continue;
     }
-    have.add(key);
-    const item: Omit<GroceryItem, 'id'> = {
-      text,
-      addedBy: uid,
-      // +added keeps the recipe order in the newest-first list
-      createdAt: createdAt + added,
-      checkedAt: null,
-      checkedBy: null,
-    };
-    batch.set(doc(col), item);
+    plan.set(key, { text, ref: null, had: [], recipes: recipe ? [recipe] : [] });
+    order.push(key);
     added++;
   }
-  if (added > 0) await batch.commit();
+
+  const batch = writeBatch(db);
+  let writes = 0;
+  const createdAt = Date.now();
+  // New items; +i keeps the recipe order in the newest-first list
+  order.forEach((key, i) => {
+    const entry = plan.get(key)!;
+    const item: Omit<GroceryItem, 'id'> = {
+      text: entry.text,
+      addedBy: uid,
+      createdAt: createdAt + i,
+      checkedAt: null,
+      checkedBy: null,
+      ...(entry.recipes.length > 0 && { forRecipes: entry.recipes.slice(0, 10) }),
+    };
+    batch.set(doc(col), item);
+    writes++;
+  });
+  // Items already on the list that are now also needed for another dish
+  for (const entry of plan.values()) {
+    if (entry.ref && entry.recipes.length > entry.had.length) {
+      batch.update(entry.ref, { forRecipes: entry.recipes.slice(0, 10) });
+      writes++;
+    }
+  }
+  if (writes > 0) await batch.commit();
   return { added, skipped };
 }
 

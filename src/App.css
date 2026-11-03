@@ -1959,3 +1959,9 @@
 .recipe-search {
   margin-bottom: 6px;
 }
+
+/* "🍽️ voor Risotto" on grocery items added from a dish */
+.grocery-for {
+  color: var(--color-ink);
+  font-weight: 600;
+}

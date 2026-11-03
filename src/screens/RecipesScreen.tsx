@@ -7,7 +7,7 @@ import { useRecipes } from '../hooks/useRecipes';
 import { useUndoableDelete } from '../hooks/useUndoableDelete';
 import SwipeToDelete from '../components/SwipeToDelete';
 import UndoToast from '../components/UndoToast';
-import { addIngredientsToGroceries, addResultText, parseIngredients } from '../lib/groceries';
+import { addIngredientsToGroceries, addResultText, fromRecipe, parseIngredients } from '../lib/groceries';
 import { searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Recipe } from '../types';
@@ -33,7 +33,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
     if (!user) return;
     setBusyId(recipe.id);
     try {
-      flash(addResultText(await addIngredientsToGroceries(householdId, user.uid, recipe.ingredients)));
+      flash(addResultText(await addIngredientsToGroceries(householdId, user.uid, fromRecipe(recipe))));
     } catch (err) {
       flash(dutchError(err, 'Toevoegen lukte niet.'));
     } finally {

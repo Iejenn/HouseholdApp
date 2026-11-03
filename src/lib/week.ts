@@ -37,7 +37,8 @@ export function weekId(date: Date): string {
   return `${year}-KW${String(week).padStart(2, '0')}`;
 }
 
-// "3 – 9 nov" or "29 dec – 4 jan"
+// "3 – 9 nov" or "29 dec – 4 jan": 7 days starting at `monday` (any start
+// day works; the week menu now starts at today)
 export function weekRangeLabel(monday: Date): string {
   const sunday = addDays(monday, 6);
   const start =

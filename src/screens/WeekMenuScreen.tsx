@@ -152,7 +152,15 @@ export default function WeekMenuScreen() {
                       onClick={() => sendToGroceries(key, plan.recipe.ingredients)}
                       disabled={busy !== null || plan.recipe.ingredients.length === 0}
                     >
-                      {busy === key ? '…' : '🛒 Naar boodschappen'}
+                      {busy === key ? (
+                        '…'
+                      ) : (
+                        // Shorter label in the narrower tablet cards, so it fits on one line
+                        <>
+                          <span className="label-long">🛒 Naar boodschappen</span>
+                          <span className="label-short">🛒 Boodschappen</span>
+                        </>
+                      )}
                     </button>
                     <button className="btn btn-ghost day-btn" onClick={() => setDay(key, null)}>
                       Wissen

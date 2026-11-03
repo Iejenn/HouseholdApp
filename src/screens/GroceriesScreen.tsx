@@ -220,6 +220,7 @@ function GroceryRow({
   onRemove: () => void;
 }) {
   const isDone = !!item.checkedAt;
+  const forDishes = (item.forRecipes ?? []).filter((r) => r.trim().toLowerCase() !== item.text.trim().toLowerCase());
   return (
     <SwipeToDelete onDelete={onRemove}>
       <div className="task-row">
@@ -232,7 +233,12 @@ function GroceryRow({
         </button>
         <div className="task-info">
           <p className={`task-title${isDone ? ' done' : ''}`}>{item.text}</p>
-          <p className="task-meta">{meta}</p>
+          <p className="task-meta">
+            {/* Which dish(es) it's for, when added from a recipe ("Pasta voor
+                Pasta" says nothing, so a dish named like the item is left out) */}
+            {forDishes.length > 0 && <span className="grocery-for">🍽️ voor {forDishes.join(', ')} · </span>}
+            {meta}
+          </p>
         </div>
       </div>
     </SwipeToDelete>

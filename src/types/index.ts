@@ -112,6 +112,9 @@ export interface GroceryItem {
   createdAt: number;
   checkedAt: number | null;
   checkedBy: string | null;
+  // Dishes this was added for ("Tomaten · voor Risotto"); missing on items
+  // typed by hand. Kept apart from the text so suggestions/dedup still match.
+  forRecipes?: string[];
 }
 // Recipe library (Gerechten) in households/{id}/recipes
 export interface Recipe {

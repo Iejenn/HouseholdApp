@@ -7,7 +7,8 @@ import { useNow } from '../hooks/useNow';
 import { useRecipes } from '../hooks/useRecipes';
 import RecipesScreen, { RecipeEditor } from './RecipesScreen';
 import { DAY_KEYS, DAY_NAMES, addDays, mondayOf, shortDate, weekId, weekRangeLabel } from '../lib/week';
-import { addIngredientsToGroceries, addResultText } from '../lib/groceries';
+import { addIngredientsToGroceries, addResultText, fromRecipe } from '../lib/groceries';
+import type { IngredientToAdd } from '../lib/groceries';
 import { DEFAULT_DISHES, resolveDay, searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
 import type { DayKey, Recipe, WeekMenu } from '../types';
@@ -55,7 +56,7 @@ export default function WeekMenuScreen() {
     }
   }
 
-  async function sendToGroceries(label: string, ingredients: string[]) {
+  async function sendToGroceries(label: string, ingredients: IngredientToAdd[]) {
     if (!user) return;
     setBusy(label);
     try {
@@ -68,7 +69,8 @@ export default function WeekMenuScreen() {
   }
 
   const planned = DAY_KEYS.map((key) => ({ key, plan: resolveDay(key, menu, recipes) }));
-  const weekIngredients = planned.flatMap(({ plan }) => (plan.kind === 'recipe' ? plan.recipe.ingredients : []));
+  // Each ingredient remembers its dish, so the list can say "voor Risotto"
+  const weekIngredients = planned.flatMap(({ plan }) => (plan.kind === 'recipe' ? fromRecipe(plan.recipe) : []));
 
   if (showRecipes) return <RecipesScreen onClose={() => setShowRecipes(false)} />;
 
@@ -149,7 +151,7 @@ export default function WeekMenuScreen() {
                   <div className="day-buttons">
                     <button
                       className="btn btn-secondary day-btn"
-                      onClick={() => sendToGroceries(key, plan.recipe.ingredients)}
+                      onClick={() => sendToGroceries(key, fromRecipe(plan.recipe))}
                       disabled={busy !== null || plan.recipe.ingredients.length === 0}
                     >
                       {busy === key ? (

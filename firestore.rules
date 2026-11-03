@@ -27,6 +27,15 @@ service cloud.firestore {
       }
     }
 
+    // Google Calendar refresh tokens and sign-in "states": server-only.
+    // The Cloud Functions use admin rights; the app itself may never read them.
+    match /calendarLinks/{uid} {
+      allow read, write: if false;
+    }
+    match /oauthStates/{state} {
+      allow read, write: if false;
+    }
+
     // Maps an invite code to a household ID only — safe to expose broadly,
     // since it leaks nothing about the household's members or contents.
     match /inviteCodes/{code} {

@@ -4,6 +4,7 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import WeatherLocationPicker from '../components/WeatherLocationPicker';
+import CalendarSettings from '../components/CalendarSettings';
 import { disablePush, enablePush, pushStatus, sendTestPush } from '../lib/push';
 import type { PushStatus } from '../lib/push';
 import { dutchError } from '../lib/firebaseErrors';
@@ -143,6 +144,11 @@ export default function SettingsScreen() {
               {message.text}
             </p>
           )}
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <p className="card-title">📅 Google Agenda</p>
+          <CalendarSettings />
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>

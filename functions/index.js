@@ -1,18 +1,13 @@
 // Server side of the push notifications. Runs on Firebase Cloud Functions
 // (needs the Blaze plan). Deploy: see README "Push-meldingen".
-import { initializeApp } from 'firebase-admin/app';
+import './init.js';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
-import { setGlobalOptions } from 'firebase-functions/v2';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
-initializeApp();
 const db = getFirestore();
-
-// Close to the Netherlands; one instance max keeps it tiny and free
-setGlobalOptions({ region: 'europe-west1', maxInstances: 1 });
 
 const TIME_ZONE = 'Europe/Amsterdam';
 
@@ -344,3 +339,6 @@ export const sendTestPush = onCall(async (request) => {
   });
   return { ok: true };
 });
+
+// Google Calendar link (read-only)
+export { calendarAuthStart, calendarAuthFinish, calendarUnlink, calendarEvents } from './calendar.js';

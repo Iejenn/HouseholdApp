@@ -35,3 +35,20 @@ meldingen naartoe bij:
 
 3. Bij een latere update: `cd ~/HouseholdApp && git pull` en daarna alleen de laatste
    `deploy`-regel opnieuw.
+
+## Google Agenda (alleen lezen)
+
+"Agenda koppelen" in Instellingen. Google stuurt je na het inloggen terug naar
+`https://iejenn.github.io/HouseholdApp/` met een eenmalige code; de functie
+`calendarAuthFinish` wisselt die in. De koppelsleutel staat alleen in
+`calendarLinks/{uid}` (geen regel geeft de app toegang). Code: `functions/calendar.js`.
+
+Eenmalig nodig (Google Cloud, project household-14b3e):
+- Google Calendar API aan, OAuth-toestemmingsscherm "In productie" met scope
+  `calendar.readonly`, en een OAuth-client (Webapplicatie) met omleidings-URI
+  `https://iejenn.github.io/HouseholdApp/`.
+- Het clientgeheim als Firebase-secret (nooit in de repo):
+
+  ```bash
+  npx firebase-tools@latest functions:secrets:set GOOGLE_CLIENT_SECRET --project household-14b3e
+  ```

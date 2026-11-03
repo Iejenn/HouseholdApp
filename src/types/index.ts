@@ -5,6 +5,24 @@ export interface UserProfile {
   createdAt: number;
   // Which push notifications this person wants (missing = all on)
   notify?: NotifyPrefs;
+  // Google Calendar link — the visible part only (the token lives server-side)
+  calendar?: CalendarLink;
+}
+export interface CalendarLink {
+  email: string;
+  linkedAt: number;
+  available: { id: string; name: string; color: string; primary?: boolean }[];
+  // Calendars this person chose to show on the home screen (none by default)
+  selected: string[];
+  needsRelink?: boolean;
+}
+export interface CalendarEvent {
+  title: string;
+  start: string; // ISO date-time, or yyyy-mm-dd for all-day events
+  end: string;
+  allDay: boolean;
+  calendar: string;
+  color: string;
 }
 export interface NotifyPrefs {
   chat?: boolean;

@@ -1,0 +1,193 @@
+rules_version = '2';
+
+// Source of truth for the database security rules. Deploy with:
+//   npx firebase-tools@latest deploy --only firestore:rules --project household-14b3e
+// (changes made by hand in the Firebase console get overwritten by a deploy)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Your own profile is fully yours; household-mates can read your display name
+    match /users/{userId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.householdId != null &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.householdId ==
+          get(/databases/$(database)/documents/users/$(userId)).data.householdId
+        )
+      );
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+
+      // Push addresses of your own phones: only you can see or change them
+      // (the Cloud Functions read them with admin rights)
+      match /pushTokens/{tokenId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Maps an invite code to a household ID only — safe to expose broadly,
+    // since it leaks nothing about the household's members or contents.
+    match /inviteCodes/{code} {
+      allow read: if request.auth != null;
+      // Only the sole member of a just-created household can register its code
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasOnly(['householdId']) &&
+        get(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.memberIds.size() == 1 &&
+        get(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.memberIds[0] == request.auth.uid;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /households/{householdId} {
+      // Shared by all subcollections below. Subcollections do NOT inherit
+      // these household rules, so every one needs its own match block.
+      function isMember() {
+        return request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.memberIds;
+      }
+
+      // Members can always read; a non-member only while there's still room (joining)
+      allow read: if request.auth != null && (
+        request.auth.uid in resource.data.memberIds ||
+        resource.data.memberIds.size() < 2
+      );
+      // Creating: you must be the sole initial member
+      allow create: if request.auth != null &&
+        request.resource.data.memberIds.size() == 1 &&
+        request.resource.data.memberIds[0] == request.auth.uid;
+      // Updating: you're joining (household not yet full), or you're a member
+      // changing something other than the member list, or you're a member
+      // removing exactly one other person (and staying in yourself)
+      allow update: if request.auth != null && (
+        (
+          request.auth.uid in request.resource.data.memberIds &&
+          !(request.auth.uid in resource.data.memberIds) &&
+          resource.data.memberIds.size() < 2
+        ) ||
+        (
+          request.auth.uid in resource.data.memberIds &&
+          request.resource.data.memberIds == resource.data.memberIds
+        ) ||
+        (
+          request.auth.uid in resource.data.memberIds &&
+          request.auth.uid in request.resource.data.memberIds &&
+          request.resource.data.memberIds.size() == resource.data.memberIds.size() - 1 &&
+          resource.data.memberIds.hasAll(request.resource.data.memberIds) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds'])
+        )
+      );
+      allow delete: if false;
+
+      match /tasks/{taskId} {
+        allow read: if isMember();
+        allow create: if isMember() && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isMember();
+        allow delete: if isMember();
+      }
+
+      // Points: one doc per checked-off task (id = taskId_completedAt)
+      match /completions/{completionId} {
+        function taskPath(taskId) {
+          return /databases/$(database)/documents/households/$(householdId)/tasks/$(taskId);
+        }
+
+        allow read: if isMember();
+
+        // Only for yourself, 1 point, and only when the same write actually
+        // checks the task off as you
+        allow create: if isMember()
+          && request.resource.data.keys().hasOnly(['taskId', 'uid', 'points', 'completedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.points == 1
+          && completionId == request.resource.data.taskId + '_' + string(request.resource.data.completedAt)
+          && getAfter(taskPath(request.resource.data.taskId)).data.completedBy == request.auth.uid
+          && getAfter(taskPath(request.resource.data.taskId)).data.completedAt == request.resource.data.completedAt;
+
+        // Removing only when the task is unchecked (or deleted) in the same write.
+        // resource == null: tasks checked off before points existed
+        allow delete: if isMember() && (
+          resource == null
+          || !existsAfter(taskPath(resource.data.taskId))
+          || getAfter(taskPath(resource.data.taskId)).data.completedAt != resource.data.completedAt
+        );
+
+        allow update: if false;
+      }
+
+      // Cat shop: append-only history of what was bought. Prices must match
+      // src/data/catShop.ts — change both together.
+      match /purchases/{purchaseId} {
+        function prices() {
+          return {
+            'food': 2, 'treat': 1, 'toy_mouse': 5, 'toy_yarn': 5,
+            'toy_rod': 8, 'bed': 15, 'scratcher': 25,
+            'wall_mint': 6, 'wall_stripes': 8, 'wall_flowers': 10, 'wall_stars': 12,
+            'floor_wood': 8, 'floor_tiles': 8, 'floor_carpet': 10,
+            'collar_red': 4, 'collar_bell': 6, 'collar_bow': 6,
+            'hat_party': 8, 'hat_flowers': 10, 'hat_crown': 20
+          };
+        }
+
+        allow read: if isMember();
+        allow create: if isMember()
+          && request.resource.data.keys().hasOnly(['item', 'cost', 'uid', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.item in prices()
+          && request.resource.data.cost == prices()[request.resource.data.item]
+          && request.resource.data.createdAt is int;
+        allow update, delete: if false;
+      }
+
+      // Shared grocery list: anyone in the household can add, check off or remove
+      match /groceries/{itemId} {
+        allow read: if isMember();
+        allow create: if isMember()
+          && request.resource.data.addedBy == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 200;
+        allow update: if isMember()
+          && request.resource.data.addedBy == resource.data.addedBy;
+        allow delete: if isMember();
+      }
+
+      // Recipe library (Gerechten): a name plus a list of ingredients
+      match /recipes/{recipeId} {
+        function validRecipe() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['name', 'ingredients', 'createdAt', 'createdBy'])
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+            && d.ingredients is list && d.ingredients.size() <= 50;
+        }
+
+        allow read: if isMember();
+        allow create: if isMember() && validRecipe() && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isMember() && validRecipe()
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if isMember();
+      }
+
+      // Week menu: one doc per week (id like "2026-KW45"), a recipe per day
+      match /weekMenus/{weekId} {
+        allow read: if isMember();
+        allow create, update: if isMember()
+          && request.resource.data.keys().hasOnly(['days', 'updatedAt'])
+          && request.resource.data.days is map
+          && request.resource.data.days.keys().hasOnly(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+        allow delete: if false;
+      }
+
+      // Chat messages: any member can read/send, only the sender can delete their own
+      match /messages/{messageId} {
+        allow read: if isMember();
+        allow create: if isMember() && request.resource.data.senderId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isMember() && resource.data.senderId == request.auth.uid;
+      }
+
+      // meta/… (e.g. the grocery-notification throttle) is server-only:
+      // no rule here means clients can't read or write it.
+    }
+  }
+}

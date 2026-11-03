@@ -1093,6 +1093,291 @@
   flex-shrink: 0;
 }
 
+/* ── Settings button (top right) ───────────────────────────── */
+
+.app-shell {
+  position: relative;
+}
+
+/* Leave room on the right of every header for the ⚙️ button */
+.app-header {
+  padding-right: 64px;
+}
+
+.settings-btn {
+  position: absolute;
+  top: calc(16px + env(safe-area-inset-top));
+  right: 16px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-btn.active {
+  background: var(--color-surface-alt);
+}
+
+.header-btn {
+  padding: 8px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Recipes (Gerechten) ───────────────────────────────────── */
+
+/* A page on top of the current tab, with its own back button */
+.page-overlay {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.back-button {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.recipe-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.recipe-ingredients {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.recipe-add {
+  padding: 8px 12px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.recipe-textarea {
+  resize: vertical;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.chip-static {
+  cursor: default;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.info-toast {
+  justify-content: center;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* ── Week menu ─────────────────────────────────────────────── */
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.week-arrow {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-ink);
+}
+
+.week-label {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+  font-weight: 600;
+}
+
+.menu-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 12px;
+}
+
+.menu-actions .btn-primary {
+  flex: 1;
+  padding: 11px 12px;
+  font-size: 14px;
+}
+
+.menu-actions .btn-ghost {
+  padding: 11px 12px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Day cards with a soft colour per day, like a paper week planner */
+.day-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+
+.day-card.today {
+  border-color: #e3b04b;
+}
+
+.day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--day-color, var(--color-surface-alt));
+}
+
+.day-mon { --day-color: #dbe8f5; }
+.day-tue { --day-color: #f8dfd2; }
+.day-wed { --day-color: #d4ece4; }
+.day-thu { --day-color: #e6ddf3; }
+.day-fri { --day-color: #f8ecc4; }
+.day-sat { --day-color: #dcefd9; }
+.day-sun { --day-color: #f6dbe4; }
+
+.day-name {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.day-date {
+  font-size: 12px;
+  color: var(--color-ink-soft);
+}
+
+.day-today {
+  margin-left: auto;
+  background: var(--color-danger);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.day-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+}
+
+.day-dish {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.day-default {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+}
+
+.day-ingredients {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.day-empty {
+  font-size: 14px;
+  color: var(--color-ink-soft);
+  font-weight: 600;
+}
+
+.day-buttons {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.day-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.day-buttons .btn-secondary {
+  flex: 1;
+}
+
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 45svh;
+  overflow-y: auto;
+}
+
+.picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1.5px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+}
+
+.picker-item.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-tint);
+}
+
+.picker-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.picker-sub {
+  font-size: 12px;
+  color: var(--color-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Install banner (Android Chrome) ────────────────────────── */
 
 .install-banner {
@@ -1279,4 +1564,12 @@
   background: var(--color-line);
   color: var(--color-ink-soft);
   cursor: default;
+}
+
+/* Secondary buttons in headers/action rows: outlined so they read as buttons */
+.header-btn,
+.menu-actions .btn-ghost {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
 }

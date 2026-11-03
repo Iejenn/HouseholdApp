@@ -81,24 +81,71 @@ export const notifyChatMessage = onDocumentCreated(
   }
 );
 
+// Groceries are often added in a row (by hand, or a whole recipe at once).
+// Instead of one push per item, the first item of a burst waits a minute and
+// then sends ONE summary of everything that person added in the meantime.
+const GROCERY_GATHER_MS = 60 * 1000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function listNames(texts) {
+  const quoted = texts.map((t) => `"${t}"`);
+  if (quoted.length === 1) return quoted[0];
+  if (quoted.length <= 4) return `${quoted.slice(0, -1).join(', ')} en ${quoted.at(-1)}`;
+  return `${quoted.slice(0, 3).join(', ')} en nog ${quoted.length - 3} meer`;
+}
+
 export const notifyGroceryAdded = onDocumentCreated(
-  'households/{householdId}/groceries/{itemId}',
+  {
+    document: 'households/{householdId}/groceries/{itemId}',
+    // The waiting one shouldn't block the other items' (quick) runs
+    maxInstances: 10,
+    timeoutSeconds: 120,
+  },
   async (event) => {
     const item = event.data?.data();
     if (!item) return;
-    const to = await recipients(event.params.householdId, item.addedBy, 'groceries');
+    const { householdId } = event.params;
+    const adderUid = item.addedBy;
+    const now = Date.now();
+
+    // Only one run per person per burst gets to send. A transaction, because
+    // a batch of items triggers several runs at exactly the same moment.
+    const throttleRef = db.doc(`households/${householdId}/meta/groceryNotify_${adderUid}`);
+    const isFirst = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(throttleRef);
+      const last = snap.exists ? snap.get('startedAt') ?? 0 : 0;
+      if (now - last < GROCERY_GATHER_MS) return false;
+      tx.set(throttleRef, { startedAt: now });
+      return true;
+    });
+    if (!isFirst) return;
+
+    await sleep(GROCERY_GATHER_MS);
+
+    // Everything this person added since the burst started and is still open
+    const since = Math.min(item.createdAt ?? now, now) - 5000;
+    const added = await db
+      .collection(`households/${householdId}/groceries`)
+      .where('createdAt', '>=', since)
+      .get();
+    const texts = added.docs
+      .filter((d) => d.get('addedBy') === adderUid && !d.get('checkedAt'))
+      .sort((x, y) => x.get('createdAt') - y.get('createdAt'))
+      .map((d) => String(d.get('text')));
+    if (texts.length === 0) return;
+
+    const to = await recipients(householdId, adderUid, 'groceries');
     if (to.length === 0) return;
-    const adder = await db.collection('users').doc(item.addedBy).get();
+    const adder = await db.collection('users').doc(adderUid).get();
     const name = adder.get('displayName') ?? 'Je partner';
+    const body =
+      texts.length === 1
+        ? `${name} zette ${listNames(texts)} op de lijst`
+        : `${name} zette ${texts.length} dingen op de lijst: ${listNames(texts)}`;
     await Promise.all(
       to.map((uid) =>
-        sendToUser(uid, {
-          title: '🛒 Boodschappen',
-          body: shorten(`${name} zette "${item.text}" op de lijst`),
-          tab: 'groceries',
-          // Several items in a row replace each other instead of stacking up
-          tag: 'groceries',
-        })
+        sendToUser(uid, { title: '🛒 Boodschappen', body: shorten(body), tab: 'groceries', tag: 'groceries' })
       )
     );
   }

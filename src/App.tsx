@@ -5,6 +5,7 @@ import LoginScreen from './screens/LoginScreen';
 import HouseholdSetupScreen from './screens/HouseholdSetupScreen';
 import TaskListScreen from './screens/TaskListScreen';
 import GroceriesScreen from './screens/GroceriesScreen';
+import WeekMenuScreen from './screens/WeekMenuScreen';
 import CatScreen from './screens/CatScreen';
 import ChatScreen from './screens/ChatScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -13,18 +14,19 @@ import InstallPrompt from './components/InstallPrompt';
 import { ErrorBoundary, GlobalErrorBar } from './components/ErrorBoundary';
 import { HouseholdProvider } from './context/HouseholdContext';
 
-type Tab = 'tasks' | 'groceries' | 'cat' | 'chat' | 'settings';
+type Tab = 'tasks' | 'groceries' | 'menu' | 'cat' | 'chat' | 'settings';
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'tasks', icon: '✅', label: 'Taken' },
   { id: 'groceries', icon: '🛒', label: 'Boodschappen' },
+  { id: 'menu', icon: '🍽️', label: 'Weekmenu' },
   { id: 'cat', icon: '🐈‍⬛', label: 'Kat' },
   { id: 'chat', icon: '💬', label: 'Chat' },
-  { id: 'settings', icon: '⚙️', label: 'Instellingen' },
 ];
 
 function isTab(value: unknown): value is Tab {
-  return TABS.some((t) => t.id === value);
+  // Settings is no longer in the tab bar (⚙️ top right), but stays a valid tab
+  return value === 'settings' || TABS.some((t) => t.id === value);
 }
 
 // A tapped notification opens the app as …/?tab=chat
@@ -36,6 +38,16 @@ function tabFromUrl(): Tab {
 function MainShell() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>(tabFromUrl);
+  // Where ⚙️ returns to when tapped again
+  const [lastTab, setLastTab] = useState<Tab>('tasks');
+
+  function toggleSettings() {
+    if (tab === 'settings') setTab(lastTab);
+    else {
+      setLastTab(tab);
+      setTab('settings');
+    }
+  }
 
   useEffect(() => {
     // Notification tapped while the app was already open: switch tab
@@ -62,10 +74,19 @@ function MainShell() {
         <ErrorBoundary key={tab}>
           {tab === 'tasks' && <TaskListScreen />}
           {tab === 'groceries' && <GroceriesScreen />}
+          {tab === 'menu' && <WeekMenuScreen />}
           {tab === 'cat' && <CatScreen />}
           {tab === 'chat' && <ChatScreen />}
           {tab === 'settings' && <SettingsScreen />}
         </ErrorBoundary>
+        {/* Settings moved out of the tab bar to make room for Weekmenu */}
+        <button
+          className={`settings-btn${tab === 'settings' ? ' active' : ''}`}
+          onClick={toggleSettings}
+          aria-label={tab === 'settings' ? 'Instellingen sluiten' : 'Instellingen'}
+        >
+          {tab === 'settings' ? '✕' : '⚙️'}
+        </button>
         <nav className="tabbar">
           {TABS.map((t) => (
             <button

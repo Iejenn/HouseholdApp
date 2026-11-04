@@ -191,7 +191,44 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isMember();
         allow create: if isMember() && request.resource.data.senderId == request.auth.uid;
-        allow update: if false;
+        // Reacting to a post-it: an emoji or a short written reply. The text,
+        // sender etc. of the note itself can never be changed.
+        function onlyChanges(field) {
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly([field]);
+        }
+        // Emoji: you may only set or remove YOUR OWN reaction
+        // (reactions.<your uid>), and only one of these four
+        function isReaction() {
+          return onlyChanges('reactions')
+            && request.resource.data.reactions is map
+            && request.resource.data.reactions.diff(resource.data.get('reactions', {})).affectedKeys().hasOnly([request.auth.uid])
+            && (
+              !(request.auth.uid in request.resource.data.reactions) ||
+              request.resource.data.reactions[request.auth.uid] in ['❤️', '👍', '😂', '🙏']
+            );
+        }
+        // Written reply: exactly one new reply, in your own name, max 80
+        // characters. Every earlier reply must still be there, unchanged.
+        function isReply() {
+          let before = resource.data.get('replies', []);
+          let after = request.resource.data.replies;
+          let addedList = after.removeAll(before);
+          let added = addedList[0];
+          return onlyChanges('replies')
+            && after is list
+            && after.size() == before.size() + 1
+            && after.size() <= 20
+            && after.hasAll(before)
+            && addedList.size() == 1
+            && added is map
+            && added.keys().hasOnly(['uid', 'text', 'at'])
+            && added.uid == request.auth.uid
+            && added.text is string
+            && added.text.size() > 0
+            && added.text.size() <= 80
+            && added.at is number;
+        }
+        allow update: if isMember() && (isReaction() || isReply());
         allow delete: if isMember() && resource.data.senderId == request.auth.uid;
       }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import {
   addDoc,
   collection,
@@ -33,6 +33,8 @@ import { dutchError } from '../lib/firebaseErrors';
 import { cachedEvents, fetchEvents } from '../lib/calendar';
 import { releaseSplash } from '../lib/splash';
 import type { CalendarEvent, GroceryItem, Task, WeekMenu } from '../types';
+import { REACTIONS, REPLY_MAX, addReply, handwriting, sortedReplies, toggleReaction } from '../lib/notes';
+import type { Note } from '../lib/notes';
 
 export type HomeTarget = 'tasks' | 'groceries' | 'menu' | 'cat';
 
@@ -43,14 +45,6 @@ const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 
 // Post-it colours to pick from
 const NOTE_COLORS = ['#fdf0a6', '#fbd3dc', '#cfe6f7', '#d6efd0', '#fde0c2'];
 
-interface Note {
-  id: string;
-  senderId: string;
-  senderName: string;
-  text: string;
-  createdAt: number;
-  color?: string;
-}
 
 function greeting(hour: number): string {
   if (hour < 6) return 'Goedenacht';
@@ -93,6 +87,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
   const [notes, setNotes] = useState<Note[]>([]);
   const [showAllNotes, setShowAllNotes] = useState(false);
   const [writing, setWriting] = useState(false);
+  // Post-it opened to react or reply (by id, so it stays live while open)
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [freshForecast, setForecast] = useState<Forecast | null>(null);
   const [weatherError, setWeatherError] = useState(false);
   const [pickingPlace, setPickingPlace] = useState(false);
@@ -144,6 +140,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
             // Just-sent notes have no server time yet
             createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
             color: data.color,
+            reactions: data.reactions,
+            replies: data.replies,
           };
         })
       );
@@ -202,6 +200,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
   const cat = computeCat(purchases, now, household?.vacations);
   const catName = household?.catName?.trim() || 'Poes';
   const todayWeather = forecast ? describeWeather(forecast.currentCode) : null;
+  const openNote = notes.find((n) => n.id === openNoteId) ?? null;
 
   return (
     <>
@@ -373,7 +372,16 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
             {notes.length === 0 && <p className="empty-state" style={{ padding: '20px' }}>Nog geen briefjes. Plak de eerste!</p>}
             <div className="board">
               {notes.map((n) => (
-                <PostIt key={n.id} note={n} mine={n.senderId === user?.uid} now={now} householdId={householdId} />
+                <PostIt
+                  key={n.id}
+                  note={n}
+                  mine={n.senderId === user?.uid}
+                  now={now}
+                  householdId={householdId}
+                  memberIds={household?.memberIds ?? []}
+                  memberNames={memberNames}
+                  onOpen={() => setOpenNoteId(n.id)}
+                />
               ))}
             </div>
             {notes.length >= 12 && !showAllNotes && (
@@ -386,6 +394,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
       </div>
 
       {writing && <NoteComposer onClose={() => setWriting(false)} />}
+      {openNote && (
+        <NoteDetail
+          note={openNote}
+          now={now}
+          memberIds={household?.memberIds ?? []}
+          memberNames={memberNames}
+          onClose={() => setOpenNoteId(null)}
+        />
+      )}
       {undoCheck.pending && (
         <UndoToast label={undoCheck.pending.title} action="afgevinkt" onUndo={undoCheck.undo} />
       )}
@@ -442,12 +459,32 @@ function AgendaCard({ events, now }: { events: CalendarEvent[]; now: number }) {
 }
 
 // One post-it. Hold your own note to take it off the board.
-function PostIt({ note, mine, now, householdId }: { note: Note; mine: boolean; now: number; householdId: string }) {
+function PostIt({
+  note,
+  mine,
+  now,
+  householdId,
+  memberIds,
+  memberNames,
+  onOpen,
+}: {
+  note: Note;
+  mine: boolean;
+  now: number;
+  householdId: string;
+  memberIds: string[];
+  memberNames: Record<string, string>;
+  onOpen: () => void;
+}) {
   const timer = useRef<number | null>(null);
+  // A long press (delete) shouldn't also count as a tap (open)
+  const held = useRef(false);
 
   function startHold() {
+    held.current = false;
     if (!mine) return;
     timer.current = window.setTimeout(() => {
+      held.current = true;
       if (window.confirm('Dit briefje van het prikbord halen?')) {
         deleteDoc(doc(db, 'households', householdId, 'messages', note.id)).catch((err) =>
           console.error('Failed to delete note', err)
@@ -460,8 +497,13 @@ function PostIt({ note, mine, now, householdId }: { note: Note; mine: boolean; n
     timer.current = null;
   }
 
+  const replies = sortedReplies(note);
+  // The board shows the last two replies; the rest is in the opened note
+  const shownReplies = replies.slice(-2);
+  const reactions = Object.values(note.reactions ?? {});
+
   return (
-    <div
+    <button
       className="postit"
       style={{ background: note.color ?? NOTE_COLORS[0], transform: `rotate(${tilt(note.id)}deg)` }}
       onTouchStart={startHold}
@@ -471,19 +513,153 @@ function PostIt({ note, mine, now, householdId }: { note: Note; mine: boolean; n
       onMouseUp={cancelHold}
       onMouseLeave={cancelHold}
       onContextMenu={(e) => mine && e.preventDefault()}
+      onClick={() => !held.current && onOpen()}
+      aria-label={`Briefje van ${note.senderName}: reageren`}
     >
       <span className="postit-pin" aria-hidden>📌</span>
-      <p className="postit-text">{note.text}</p>
-      <p className="postit-meta">
-        — {note.senderName} · {shortAgo(note.createdAt, now)}
-      </p>
+      <span className="postit-text" style={handwriting(note.senderId, memberIds, 17)}>
+        {note.text}
+      </span>
+      {shownReplies.length > 0 && (
+        <span className="postit-replies">
+          {replies.length > shownReplies.length && (
+            <span className="postit-more">+{replies.length - shownReplies.length} eerder</span>
+          )}
+          {shownReplies.map((r) => (
+            <span key={`${r.uid}-${r.at}`} className="postit-reply" style={handwriting(r.uid, memberIds, 15)}>
+              ↳ {memberNames[r.uid] ?? '…'}: {r.text}
+            </span>
+          ))}
+        </span>
+      )}
+      <span className="postit-meta">
+        {reactions.length > 0 && <span className="postit-reactions">{reactions.join('')}</span>}
+        <span>
+          — {note.senderName} · {shortAgo(note.createdAt, now)}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+// An opened post-it: react with an emoji or write a short reply
+function NoteDetail({
+  note,
+  now,
+  memberIds,
+  memberNames,
+  onClose,
+}: {
+  note: Note;
+  now: number;
+  memberIds: string[];
+  memberNames: Record<string, string>;
+  onClose: () => void;
+}) {
+  const { user } = useAuth();
+  const { householdId } = useHousehold();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mine = user ? note.reactions?.[user.uid] : undefined;
+
+  async function react(emoji: string) {
+    if (!user) return;
+    setError(null);
+    try {
+      await toggleReaction(householdId, note, user.uid, emoji);
+    } catch (err) {
+      setError(dutchError(err, 'Reageren lukte niet.'));
+    }
+  }
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    if (!user || !text.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await addReply(householdId, note.id, user.uid, text);
+      setText('');
+    } catch (err) {
+      setError(dutchError(err, 'Versturen lukte niet.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="postit postit-open" style={{ background: note.color ?? NOTE_COLORS[0] }}>
+          <span className="postit-pin" aria-hidden>📌</span>
+          <span className="postit-text" style={handwriting(note.senderId, memberIds, 20)}>
+            {note.text}
+          </span>
+          {sortedReplies(note).map((r) => (
+            <span key={`${r.uid}-${r.at}`} className="postit-reply" style={handwriting(r.uid, memberIds, 17)}>
+              ↳ {memberNames[r.uid] ?? '…'}: {r.text}
+            </span>
+          ))}
+          <span className="postit-meta">
+            <span />
+            <span>
+              — {note.senderName} · {shortAgo(note.createdAt, now)}
+            </span>
+          </span>
+        </div>
+
+        {/* One emoji per person; tap yours again to take it back */}
+        <div className="reaction-row">
+          {REACTIONS.map((emoji) => {
+            const who = Object.entries(note.reactions ?? {})
+              .filter(([, e]) => e === emoji)
+              .map(([uid]) => memberNames[uid] ?? '…');
+            return (
+              <button
+                key={emoji}
+                className={`reaction-btn${mine === emoji ? ' active' : ''}`}
+                onClick={() => react(emoji)}
+                aria-pressed={mine === emoji}
+              >
+                <span className="reaction-emoji">{emoji}</span>
+                {who.length > 0 && <span className="reaction-who">{who.join(', ')}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        <form className="reply-form" onSubmit={send}>
+          <input
+            className="input"
+            placeholder="Schrijf een reactie…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={REPLY_MAX}
+            enterKeyHint="send"
+          />
+          <button className="btn btn-primary" type="submit" disabled={busy || !text.trim()}>
+            {busy ? '…' : 'Stuur'}
+          </button>
+        </form>
+        {text.length > REPLY_MAX - 15 && (
+          <p className="settings-note" style={{ margin: '4px 0 0' }}>
+            Nog {REPLY_MAX - text.length} tekens
+          </p>
+        )}
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginTop: 8 }}>{error}</p>}
+
+        <button className="btn btn-ghost btn-block" onClick={onClose} style={{ marginTop: 12 }}>
+          Sluiten
+        </button>
+      </div>
     </div>
   );
 }
 
 function NoteComposer({ onClose }: { onClose: () => void }) {
   const { user, profile } = useAuth();
-  const { householdId } = useHousehold();
+  const { householdId, household } = useHousehold();
   const [text, setText] = useState('');
   const [color, setColor] = useState(NOTE_COLORS[0]);
   const [busy, setBusy] = useState(false);
@@ -515,7 +691,8 @@ function NoteComposer({ onClose }: { onClose: () => void }) {
         <h3 className="modal-title">Nieuw briefje</h3>
         <textarea
           className="input postit-input"
-          style={{ background: color }}
+          // In your own handwriting, so you see how it will look on the board
+          style={{ background: color, ...handwriting(user?.uid ?? '', household?.memberIds ?? [], 18) }}
           placeholder="Schrijf iets liefs, of: vergeet de pakketjes niet!"
           value={text}
           onChange={(e) => setText(e.target.value)}

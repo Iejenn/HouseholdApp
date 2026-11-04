@@ -232,6 +232,14 @@ service cloud.firestore {
         allow delete: if isMember() && resource.data.senderId == request.auth.uid;
       }
 
+      // Summaries kept up to date by the Cloud Functions (functions/stats.js):
+      // points, cat items, grocery counts. Members can read them; only the
+      // server writes them, so nobody can give themselves extra points.
+      match /stats/{statId} {
+        allow read: if isMember();
+        allow write: if false;
+      }
+
       // meta/… (e.g. the grocery-notification throttle) is server-only:
       // no rule here means clients can't read or write it.
     }

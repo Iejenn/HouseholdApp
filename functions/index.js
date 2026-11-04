@@ -262,9 +262,11 @@ export const dailyReminder = onSchedule(
 
     for (const household of households.docs) {
       if (onVacation(household)) continue; // no nagging on holiday
-      const [tasks, food] = await Promise.all([
+      // Last feeding from the points summary (functions/stats.js); only
+      // households without one yet fall back to reading every food purchase
+      const [tasks, points] = await Promise.all([
         household.ref.collection('tasks').get(),
-        household.ref.collection('purchases').where('item', '==', 'food').get(),
+        household.ref.collection('stats').doc('points').get(),
       ]);
 
       const lateCount = tasks.docs.filter((t) => isLate(t.data(), today)).length;
@@ -272,7 +274,11 @@ export const dailyReminder = onSchedule(
       const dueToday = tasks.docs
         .map((t) => t.data())
         .filter((t) => !t.isRecurring && !t.completedAt && t.dueAt != null && dayNumber(t.dueAt) === today);
-      const lastFood = Math.max(0, ...food.docs.map((p) => p.get('createdAt') ?? 0));
+      let lastFood = points.get('lastFoodAt');
+      if (lastFood === undefined) {
+        const food = await household.ref.collection('purchases').where('item', '==', 'food').get();
+        lastFood = Math.max(0, ...food.docs.map((p) => p.get('createdAt') ?? 0));
+      }
       const paused = pausedMs(lastFood, now, household.get('vacations') ?? []);
       const fullness = lastFood ? 100 * (1 - (now - lastFood - paused) / FOOD_LASTS_MS) : 0;
       const catName = household.get('catName')?.trim() || 'Poes';
@@ -424,3 +430,12 @@ export const sendTestPush = onCall(async (request) => {
 
 // Google Calendar link (read-only)
 export { calendarAuthStart, calendarAuthFinish, calendarUnlink, calendarEvents } from './calendar.js';
+
+// Summaries that keep the app fast and cheap (points, cat, grocery suggestions)
+export {
+  statsCompletionCreated,
+  statsCompletionDeleted,
+  statsPurchaseCreated,
+  statsGroceryCreated,
+  nightlyMaintenance,
+} from './stats.js';

@@ -344,7 +344,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
             </SectionCard>
 
             <button className="home-cat" onClick={() => onNavigate('cat')}>
-              <span className="home-cat-emoji">🐈‍⬛</span>
+              {/* Black cat emoji for the tuxedo, a normal one for the striped cats */}
+              <span className="home-cat-emoji">{(household?.catCoat ?? 'tuxedo') === 'tuxedo' ? '🐈‍⬛' : '🐈'}</span>
               <span className="task-info">
                 <span className="task-title" style={{ display: 'block' }}>
                   {cat.mood === 'hungry'

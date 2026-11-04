@@ -2060,3 +2060,47 @@
   color: var(--color-ink);
   font-weight: 600;
 }
+
+/* "Jullie kat" popup: the three cats to choose from */
+.coat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.coat-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 10px;
+  border-radius: 16px;
+  border: 2px solid var(--color-line);
+  background: var(--color-surface-alt);
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-ink);
+}
+
+.coat-option.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-tint);
+}
+
+.cat-thumb {
+  width: 100%;
+  max-width: 96px;
+  height: auto;
+}
+
+.coat-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.coat-selected {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-primary);
+}

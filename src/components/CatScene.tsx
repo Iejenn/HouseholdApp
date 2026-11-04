@@ -487,6 +487,18 @@ function Pumpkin() {
 }
 
 // The cat itself, drawn in its own 200×220 coordinate box
+// Just the cat, sitting, in a given coat: the thumbnails in the
+// "Jullie kat" picker (no room around it)
+export function CatThumb({ coat }: { coat: CatCoat }) {
+  return (
+    <CoatContext.Provider value={coatPalette(coat)}>
+      <svg viewBox="20 10 180 210" className="cat-thumb" role="img" aria-hidden>
+        <Cat mood="content" sleeping={false} collar={null} hat={null} />
+      </svg>
+    </CoatContext.Provider>
+  );
+}
+
 // The sitting cat's tail
 const TAIL = 'M140 196 C 185 196, 200 160, 182 128 C 176 118, 166 124, 172 134 C 184 156, 172 182, 136 184 Z';
 

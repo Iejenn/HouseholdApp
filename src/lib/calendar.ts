@@ -37,6 +37,16 @@ export function forgetCachedEvents() {
   }
 }
 
+// Last fetched events, however old: shown straight away on opening the app
+// while fresh ones load in the background (so the agenda card doesn't pop in)
+export function cachedEvents(): { linked: number; events: CalendarEvent[] } | null {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null')?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Upcoming events of everyone in the household (only the calendars they chose)
 export async function fetchEvents(force = false): Promise<{ linked: number; events: CalendarEvent[] }> {
   if (!force) {

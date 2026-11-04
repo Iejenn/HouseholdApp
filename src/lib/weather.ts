@@ -29,6 +29,15 @@ export function describeWeather(code: number): { emoji: string; label: string } 
 
 const CACHE_MS = 30 * 60 * 1000; // no need to ask more than every half hour
 
+// Last fetched forecast for this place, however old (shown while refreshing)
+export function cachedForecast(loc: WeatherLocation): Forecast | null {
+  try {
+    return JSON.parse(localStorage.getItem(`forecast:${loc.lat},${loc.lon}`) ?? 'null')?.forecast ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchForecast(loc: WeatherLocation): Promise<Forecast> {
   const cacheKey = `forecast:${loc.lat},${loc.lon}`;
   try {

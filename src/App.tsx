@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { releaseSplash } from './lib/splash';
 import './App.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -48,6 +49,10 @@ function MainShell() {
   const [tab, setTab] = useState<Tab>(tabFromUrl);
   // Where ⚙️ returns to when tapped again
   const [lastTab, setLastTab] = useState<Tab>('home');
+  // Opened on another tab (e.g. from a notification): don't wait for Thuis
+  useEffect(() => {
+    if (tab !== 'home') releaseSplash();
+  }, [tab]);
   const [notice, setNotice] = useState<string | null>(null);
 
   function toggleSettings() {
@@ -150,13 +155,13 @@ function MainShell() {
 
 function RootRouter() {
   const { user, profile, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="centered-screen">
-        <p style={{ color: 'var(--color-ink-soft)' }}>Laden…</p>
-      </div>
-    );
-  }
+  const showsMain = !loading && !!user && !!profile?.householdId;
+  // Login / set-up screens need no data: drop the loading screen right away.
+  // (Thuis lifts it itself once its data is in, see HomeScreen.)
+  useEffect(() => {
+    if (!loading && !showsMain) releaseSplash();
+  }, [loading, showsMain]);
+  if (loading) return null; // the loading screen from index.html is still up
   if (!user || !profile) return <LoginScreen />;
   if (!profile.householdId) return <HouseholdSetupScreen />;
   return <MainShell />;

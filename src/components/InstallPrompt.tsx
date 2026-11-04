@@ -9,14 +9,23 @@ interface BeforeInstallPromptEvent extends Event {
 const DISMISS_KEY = 'installPromptDismissedAt';
 const DISMISS_FOR_MS = 7 * 24 * 60 * 60 * 1000; // ask again after a week
 
+const ua = navigator.userAgent;
 const isAndroidChrome =
-  /Android/i.test(navigator.userAgent) &&
-  /Chrome\//.test(navigator.userAgent) &&
+  /Android/i.test(ua) &&
+  /Chrome\//.test(ua) &&
   // Samsung Internet, Edge, Opera etc. also say "Chrome" — skip those
-  !/SamsungBrowser|EdgA|OPR|Firefox|wv\)/i.test(navigator.userAgent);
+  !/SamsungBrowser|EdgA|OPR|Firefox|wv\)/i.test(ua);
+// iPhone/iPad: no install button exists there, so we explain the Share menu.
+// (iPads pretend to be a Mac, but a Mac has no touch screen.)
+const isMobile = /Android|iPhone|iPad|iPod/i.test(ua) || navigator.maxTouchPoints > 1;
+const isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
 
 function isInstalled(): boolean {
-  return window.matchMedia('(display-mode: standalone)').matches;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    // Safari's own flag for "opened from the home screen"
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
 }
 
 function recentlyDismissed(): boolean {
@@ -39,9 +48,10 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 export default function InstallPrompt() {
   const [canPrompt, setCanPrompt] = useState(deferredPrompt !== null);
-  const [hidden, setHidden] = useState(
-    () => !isAndroidChrome || isInstalled() || recentlyDismissed()
-  );
+  // Shown on Android Chrome and iPhone/iPad from the start; on a computer
+  // (Chrome/Edge) only once the browser says installing is possible
+  const [hidden, setHidden] = useState(() => isInstalled() || recentlyDismissed());
+  const supported = canPrompt || isAndroidChrome || isIOS;
 
   useEffect(() => {
     const onReady = () => setCanPrompt(true);
@@ -54,7 +64,7 @@ export default function InstallPrompt() {
     };
   }, []);
 
-  if (hidden) return null;
+  if (hidden || !supported) return null;
 
   function dismiss() {
     try {
@@ -82,8 +92,12 @@ export default function InstallPrompt() {
         <p className="install-title">Installeer Huishouden</p>
         <p className="install-sub">
           {canPrompt
-            ? 'Zet de app op je startscherm, dan heb je hem altijd bij de hand.'
-            : 'Tik in Chrome op ⋮ en kies "Toevoegen aan startscherm".'}
+            ? isMobile
+              ? 'Zet de app op je startscherm, dan heb je hem altijd bij de hand.'
+              : 'Installeer de app op je computer: hij opent dan in een eigen venster.'
+            : isIOS
+              ? 'Tik op Deel ⬆️ en kies "Zet op beginscherm".'
+              : 'Tik in Chrome op ⋮ en kies "Toevoegen aan startscherm".'}
         </p>
       </div>
       {canPrompt && (

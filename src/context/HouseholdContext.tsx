@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from './AuthContext';
 import type { Completion, Household, Purchase, UserProfile } from '../types';
@@ -11,6 +11,8 @@ interface HouseholdContextValue {
   householdId: string;
   household: Household | null;
   memberNames: Record<string, string>;
+  // For computeCat only: owned items, the last feeding and recent treats
+  // (not the full history any more)
   purchases: Purchase[];
   earned: number;
   balance: number;
@@ -18,6 +20,18 @@ interface HouseholdContextValue {
   // the loading screen, so the cat doesn't flash "hungry" with 0 data)
   ready: boolean;
 }
+
+// Kept up to date by the Cloud Functions (functions/stats.js), so the app
+// doesn't need every check-off and purchase ever
+interface PointsSummary {
+  earned: number;
+  spent: number;
+  owned: string[];
+  lastFoodAt: number;
+}
+
+// Treats make the cat happy for 12h, so only purchases this recent are loaded
+const RECENT_PURCHASES_MS = 13 * 60 * 60 * 1000;
 
 const HouseholdContext = createContext<HouseholdContextValue | undefined>(undefined);
 
@@ -27,6 +41,10 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const householdId = profile!.householdId!;
   const [household, setHousehold] = useState<Household | null>(null);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  // undefined = still loading, null = no summary yet (older household, or the
+  // functions aren't deployed yet): then we count the old way below
+  const [summary, setSummary] = useState<PointsSummary | null | undefined>(undefined);
+  const [recentPurchases, setRecentPurchases] = useState<Purchase[] | null>(null);
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [completionsLoaded, setCompletionsLoaded] = useState(false);
@@ -75,26 +93,66 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     return () => unsubs.forEach((u) => u());
   }, [memberKey]);
 
-  // Every check-off ever — fine for a 2-person household; if this ever gets
-  // slow it can be replaced by a running total
+  // Points and cat: one small summary doc instead of every check-off and
+  // purchase ever (that list keeps growing, and every app open read it all)
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'households', householdId, 'completions'), (snap) => {
-      setCompletions(snap.docs.map((d) => d.data() as Completion));
-      setCompletionsLoaded(true);
-    });
+    const unsub = onSnapshot(
+      doc(db, 'households', householdId, 'stats', 'points'),
+      (snap) => {
+        if (snap.exists()) setSummary(snap.data() as PointsSummary);
+        // "Not there" from the phone's cache only means "not downloaded yet":
+        // wait for the server before falling back to the expensive way
+        else if (!snap.metadata.fromCache) setSummary(null);
+      },
+      () => setSummary(null) // e.g. rules not deployed yet: count the old way
+    );
     return unsub;
   }, [householdId]);
 
+  // Recent purchases: treats (they count for 12h), and a new purchase shows
+  // up on the cat right away instead of after the summary updates
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'households', householdId, 'purchases'), (snap) => {
-      setPurchases(snap.docs.map((d) => d.data() as Purchase));
-      setPurchasesLoaded(true);
-    });
+    const since = Date.now() - RECENT_PURCHASES_MS;
+    const q = query(collection(db, 'households', householdId, 'purchases'), where('createdAt', '>=', since));
+    const unsub = onSnapshot(q, (snap) => setRecentPurchases(snap.docs.map((d) => d.data() as Purchase)));
     return unsub;
   }, [householdId]);
 
-  const earned = completions.reduce((sum, c) => sum + c.points, 0);
-  const spent = purchases.reduce((sum, p) => sum + p.cost, 0);
+  // Fallback until the summary exists: every check-off and purchase ever
+  const useFallback = summary === null;
+  useEffect(() => {
+    if (!useFallback) return;
+    const unsubs = [
+      onSnapshot(collection(db, 'households', householdId, 'completions'), (snap) => {
+        setCompletions(snap.docs.map((d) => d.data() as Completion));
+        setCompletionsLoaded(true);
+      }),
+      onSnapshot(collection(db, 'households', householdId, 'purchases'), (snap) => {
+        setPurchases(snap.docs.map((d) => d.data() as Purchase));
+        setPurchasesLoaded(true);
+      }),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [householdId, useFallback]);
+
+  let earned: number;
+  let spent: number;
+  let catPurchases: Purchase[];
+  if (summary) {
+    earned = summary.earned;
+    spent = summary.spent;
+    // Rebuild what computeCat needs: owned items, the last feeding, recent treats
+    catPurchases = [
+      ...summary.owned.map((item) => ({ item, cost: 0, uid: '', createdAt: 0 })),
+      ...(summary.lastFoodAt ? [{ item: 'food', cost: 0, uid: '', createdAt: summary.lastFoodAt }] : []),
+      ...(recentPurchases ?? []),
+    ];
+  } else {
+    earned = completions.reduce((sum, c) => sum + c.points, 0);
+    spent = purchases.reduce((sum, p) => sum + p.cost, 0);
+    catPurchases = purchases;
+  }
+  const pointsLoaded = summary ? recentPurchases !== null : summary === null && completionsLoaded && purchasesLoaded;
 
   return (
     <HouseholdContext.Provider
@@ -102,10 +160,10 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
         householdId,
         household,
         memberNames,
-        purchases,
+        purchases: catPurchases,
         earned,
         balance: earned - spent,
-        ready: household !== null && completionsLoaded && purchasesLoaded,
+        ready: household !== null && pointsLoaded,
       }}
     >
       {children}

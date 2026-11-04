@@ -6,9 +6,9 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
   query,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +17,8 @@ import { useNow } from '../hooks/useNow';
 import { useUndoableDelete } from '../hooks/useUndoableDelete';
 import SwipeToDelete from '../components/SwipeToDelete';
 import UndoToast from '../components/UndoToast';
-import { isHiddenDone } from '../lib/time';
+import { HIDE_DONE_AFTER_MS, isHiddenDone } from '../lib/time';
+import { groceryKey } from '../lib/groceries';
 import { dutchError } from '../lib/firebaseErrors';
 import RecipesScreen from './RecipesScreen';
 import SectionCard from '../components/SectionCard';
@@ -26,22 +27,44 @@ import type { GroceryItem } from '../types';
 export default function GroceriesScreen() {
   const { user } = useAuth();
   const { householdId, memberNames } = useHousehold();
-  const [items, setItems] = useState<GroceryItem[]>([]);
+  // Only what the list shows: everything still open, plus what was checked
+  // off in the last 72h. (The full history kept growing and was read on every
+  // open; how often you buy something now lives in stats/groceries.)
+  const [openItems, setOpenItems] = useState<GroceryItem[]>([]);
+  const [recentChecked, setRecentChecked] = useState<GroceryItem[]>([]);
+  const [history, setHistory] = useState<Record<string, { label: string; count: number; last: number }> | null>(null);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [showRecipes, setShowRecipes] = useState(false);
   const now = useNow();
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'households', householdId, 'groceries'),
-      orderBy('createdAt', 'desc')
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setItems(snap.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id })));
-    });
-    return unsub;
+    const col = collection(db, 'households', householdId, 'groceries');
+    const toItems = (snap: { docs: { id: string; data: () => unknown }[] }) =>
+      snap.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id }));
+    const unsubs = [
+      onSnapshot(query(col, where('checkedAt', '==', null)), (snap) => setOpenItems(toItems(snap))),
+      onSnapshot(query(col, where('checkedAt', '>=', Date.now() - HIDE_DONE_AFTER_MS)), (snap) =>
+        setRecentChecked(toItems(snap))
+      ),
+      // Suggestion counts, kept by the Cloud Functions (functions/stats.js)
+      onSnapshot(
+        doc(db, 'households', householdId, 'stats', 'groceries'),
+        (snap) => {
+          if (snap.exists()) setHistory(snap.get('items') ?? {});
+          else if (!snap.metadata.fromCache) setHistory(null); // see HouseholdContext
+        },
+        () => setHistory(null)
+      ),
+    ];
+    return () => unsubs.forEach((u) => u());
   }, [householdId]);
+
+  // Newest first, like before. Right after checking something off it can sit
+  // in both lists for a moment, so each item only once (by id).
+  const items = [...new Map([...recentChecked, ...openItems].map((i) => [i.id, i])).values()].sort(
+    (a, b) => b.createdAt - a.createdAt
+  );
 
   function handleAdd(e: FormEvent) {
     e.preventDefault();
@@ -95,17 +118,20 @@ export default function GroceriesScreen() {
 
   // Quick-add buttons: things bought before (checked-off items stay in the
   // database), most often first. While typing they filter like autocomplete.
-  const openNames = new Set(open.map((i) => i.text.trim().toLowerCase()));
-  const history = new Map<string, { label: string; count: number; last: number }>();
-  for (const i of items) {
-    const key = i.text.trim().toLowerCase();
-    const entry = history.get(key) ?? { label: i.text.trim(), count: 0, last: 0 };
-    entry.count += 1;
-    if (i.createdAt > entry.last) entry.last = i.createdAt;
-    history.set(key, entry);
+  const openNames = new Set(open.map((i) => groceryKey(i.text)));
+  // From the summary; until that exists, from what's loaded now
+  const counts = new Map<string, { label: string; count: number; last: number }>(Object.entries(history ?? {}));
+  if (!history) {
+    for (const i of items) {
+      const key = groceryKey(i.text);
+      const entry = counts.get(key) ?? { label: i.text.trim(), count: 0, last: 0 };
+      entry.count += 1;
+      if (i.createdAt > entry.last) entry.last = i.createdAt;
+      counts.set(key, entry);
+    }
   }
-  const typed = text.trim().toLowerCase();
-  const suggestions = [...history.entries()]
+  const typed = groceryKey(text);
+  const suggestions = [...counts.entries()]
     .filter(([key, e]) => !openNames.has(key) && (typed ? key.includes(typed) && key !== typed : e.count >= 2))
     .sort(([, a], [, b]) => b.count - a.count || b.last - a.last)
     .slice(0, 8)

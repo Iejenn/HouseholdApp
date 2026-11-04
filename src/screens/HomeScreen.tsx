@@ -10,6 +10,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  where,
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
@@ -103,7 +104,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
         setTasks(snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id })));
         markLoaded('tasks');
       }),
-      onSnapshot(collection(db, 'households', householdId, 'groceries'), (snap) => {
+      // Only the open ones: that's all the tile shows (not the whole history)
+      onSnapshot(query(collection(db, 'households', householdId, 'groceries'), where('checkedAt', '==', null)), (snap) => {
         setGroceries(snap.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id })));
         markLoaded('groceries');
       }),

@@ -15,12 +15,12 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
-import { useRecipes } from '../hooks/useRecipes';
+import { useRecipesState } from '../hooks/useRecipes';
 import SectionCard from '../components/SectionCard';
 import WeatherLocationPicker from '../components/WeatherLocationPicker';
 import { computeCat } from '../data/catShop';
 import { findTaskGroup } from '../data/taskCatalog';
-import { describeWeather, fetchForecast } from '../lib/weather';
+import { cachedForecast, describeWeather, fetchForecast } from '../lib/weather';
 import type { Forecast } from '../lib/weather';
 import { resolveDay } from '../lib/menu';
 import { DAY_KEYS, weekId } from '../lib/week';
@@ -30,7 +30,8 @@ import { useUndoCheck } from '../hooks/useUndoCheck';
 import UndoToast from '../components/UndoToast';
 import { toggleTaskDone } from '../lib/tasks';
 import { dutchError } from '../lib/firebaseErrors';
-import { fetchEvents } from '../lib/calendar';
+import { cachedEvents, fetchEvents } from '../lib/calendar';
+import { releaseSplash } from '../lib/splash';
 import type { CalendarEvent, GroceryItem, Task, WeekMenu } from '../types';
 
 export type HomeTarget = 'tasks' | 'groceries' | 'menu' | 'cat';
@@ -78,8 +79,12 @@ function tilt(id: string): number {
 // Home: today at a glance plus the post-it board (which replaces the chat)
 export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget) => void }) {
   const { user, profile } = useAuth();
-  const { householdId, household, purchases, memberNames } = useHousehold();
-  const recipes = useRecipes(householdId);
+  const { householdId, household, purchases, memberNames, ready: householdReady } = useHousehold();
+  const { recipes, loaded: recipesLoaded } = useRecipesState(householdId);
+  // Which first loads are in; the loading screen waits for all of them
+  const [loaded, setLoaded] = useState({ tasks: false, groceries: false, menu: false, notes: false });
+  const markLoaded = (part: keyof typeof loaded) =>
+    setLoaded((cur) => (cur[part] ? cur : { ...cur, [part]: true }));
   const now = useNow();
   const today = new Date(now);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -88,30 +93,34 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
   const [notes, setNotes] = useState<Note[]>([]);
   const [showAllNotes, setShowAllNotes] = useState(false);
   const [writing, setWriting] = useState(false);
-  const [forecast, setForecast] = useState<Forecast | null>(null);
+  const [freshForecast, setForecast] = useState<Forecast | null>(null);
   const [weatherError, setWeatherError] = useState(false);
   const [pickingPlace, setPickingPlace] = useState(false);
-  const [agenda, setAgenda] = useState<{ linked: number; events: CalendarEvent[] } | null>(null);
+  // Starts with the last visit's events, so the card is there right away
+  const [agenda, setAgenda] = useState<{ linked: number; events: CalendarEvent[] } | null>(cachedEvents);
   const undoCheck = useUndoCheck(tasks, householdId, user?.uid);
   const vacation = activeVacation(household);
 
   useEffect(() => {
     const unsubs = [
-      onSnapshot(collection(db, 'households', householdId, 'tasks'), (snap) =>
-        setTasks(snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id })))
-      ),
-      onSnapshot(collection(db, 'households', householdId, 'groceries'), (snap) =>
-        setGroceries(snap.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id })))
-      ),
+      onSnapshot(collection(db, 'households', householdId, 'tasks'), (snap) => {
+        setTasks(snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id })));
+        markLoaded('tasks');
+      }),
+      onSnapshot(collection(db, 'households', householdId, 'groceries'), (snap) => {
+        setGroceries(snap.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id })));
+        markLoaded('groceries');
+      }),
     ];
     return () => unsubs.forEach((u) => u());
   }, [householdId]);
 
   const thisWeek = weekId(today);
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'households', householdId, 'weekMenus', thisWeek), (snap) =>
-      setMenu(snap.exists() ? (snap.data() as WeekMenu) : { days: {}, updatedAt: 0 })
-    );
+    const unsub = onSnapshot(doc(db, 'households', householdId, 'weekMenus', thisWeek), (snap) => {
+      setMenu(snap.exists() ? (snap.data() as WeekMenu) : { days: {}, updatedAt: 0 });
+      markLoaded('menu');
+    });
     return unsub;
   }, [householdId, thisWeek]);
 
@@ -122,7 +131,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
       orderBy('createdAt', 'desc'),
       limit(showAllNotes ? 60 : 12)
     );
-    const unsub = onSnapshot(q, (snap) =>
+    const unsub = onSnapshot(q, (snap) => {
+      markLoaded('notes');
       setNotes(
         snap.docs.map((d) => {
           const data = d.data();
@@ -136,12 +146,21 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
             color: data.color,
           };
         })
-      )
-    );
+      );
+    });
     return unsub;
   }, [householdId, showAllNotes]);
 
+  // Everything Thuis shows is in: lift the loading screen. Weather and agenda
+  // don't count (slow, and shown from the last visit's copy meanwhile).
+  const allLoaded = householdReady && recipesLoaded && Object.values(loaded).every(Boolean);
+  useEffect(() => {
+    if (allLoaded) releaseSplash();
+  }, [allLoaded]);
+
   const location = household?.location;
+  // Until the fresh forecast is in, show the last one we had for this place
+  const forecast = freshForecast ?? (location ? cachedForecast(location) : null);
   useEffect(() => {
     if (!location) return;
     setWeatherError(false);

@@ -6,11 +6,114 @@
     <meta name="theme-color" content="#f6f2ec" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Huishouden</title>
+    <!-- Fonts early, so the loading screen text doesn't jump when they arrive -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" />
+    <!-- Loading screen: plain HTML/CSS so it shows before any app code has
+         downloaded. The app removes it once Thuis has its data (src/lib/splash.ts). -->
+    <style>
+      #splash {
+        position: fixed; inset: 0; z-index: 1000;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+        background: #f6f2ec; color: #2e2a26;
+        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: opacity 0.3s ease;
+      }
+      #splash.splash-hide { opacity: 0; pointer-events: none; }
+      .splash-plant { display: flex; flex-direction: column; align-items: center; }
+      .splash-stage { width: 160px; height: 190px; perspective: 600px; display: flex; align-items: flex-end; justify-content: center; }
+      .splash-spin {
+        position: relative; width: 0; height: 0; margin-bottom: 26px; transform-style: preserve-3d;
+        transform: rotateX(-14deg) rotateY(0deg); animation: splash-spin 7s linear infinite;
+      }
+      @keyframes splash-spin { to { transform: rotateX(-14deg) rotateY(360deg); } }
+      .splash-sway { transform-style: preserve-3d; transform-origin: 0 0; animation: splash-sway 3.5s ease-in-out infinite; }
+      @keyframes splash-sway { 50% { transform: rotateZ(3deg); } }
+      .splash-shadow {
+        width: 110px; height: 18px; margin-top: -14px; border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(46, 42, 38, 0.22), transparent);
+      }
+      .splash-title { font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 22px; margin: 0; text-align: center; padding: 0 16px; }
+      .splash-dots span {
+        display: inline-block; width: 7px; height: 7px; margin: 0 4px; border-radius: 50%;
+        background: #b94e5c; opacity: 0.25; animation: splash-dot 1.2s infinite;
+      }
+      .splash-dots span:nth-child(2) { animation-delay: 0.2s; }
+      .splash-dots span:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes splash-dot { 30% { opacity: 1; transform: translateY(-3px); } }
+      /* "Reduce motion" on the phone: a still pot, only the dots pulse */
+      @media (prefers-reduced-motion: reduce) {
+        .splash-spin { animation: none; transform: rotateX(-14deg) rotateY(20deg); }
+        .splash-sway { animation: none; }
+      }
+    </style>
     <meta property="og:image" content="https://bolt.new/static/og_default.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
 </head>
   <body>
+    <div id="splash" role="status" aria-live="polite">
+      <div class="splash-plant">
+        <div class="splash-stage"><div class="splash-spin" id="splash-pot"></div></div>
+        <div class="splash-shadow"></div>
+      </div>
+      <p class="splash-title">Je huishouden wordt geladen</p>
+      <div class="splash-dots"><span></span><span></span><span></span></div>
+    </div>
+    <script>
+      // Builds the spinning flowerpot: a tapered "cylinder" of flat panels in
+      // CSS 3D (no 3D library, so it shows instantly), with soil and leaves.
+      (function () {
+        var pot = document.getElementById('splash-pot');
+        var N = 20, H = 60, RT = 38, RB = 28, RIM = 13;
+        var rad = Math.PI / N;
+        var slant = Math.hypot(H, RT - RB);
+        var tilt = (Math.atan((RT - RB) / H) * 180) / Math.PI;
+        var wTop = 2 * RT * Math.tan(rad) + 2; // +2: panels overlap, so no seams
+        var wBot = 2 * RB * Math.tan(rad) + 2;
+        var wRim = 2 * (RT + 4) * Math.tan(rad) + 2;
+        function shade(a, base) {
+          var l = 0.72 + 0.3 * Math.cos(((a - 320) * Math.PI) / 180); // light from the front-left
+          return 'rgb(' + base.map(function (v) { return Math.round(Math.min(255, v * l)); }).join(',') + ')';
+        }
+        function add(parent, css, html) {
+          var el = document.createElement('div');
+          el.style.cssText = 'position:absolute;transform-style:preserve-3d;' + css;
+          if (html) el.innerHTML = html;
+          parent.appendChild(el);
+          return el;
+        }
+        for (var i = 0; i < N; i++) {
+          var a = (i * 360) / N;
+          // Pot wall: hangs from the top edge, leaning inward towards the bottom
+          add(pot, 'left:' + -wTop / 2 + 'px;top:' + -H + 'px;width:' + wTop + 'px;height:' + slant + 'px;' +
+            'background:' + shade(a, [196, 104, 72]) + ';backface-visibility:hidden;' +
+            'clip-path:polygon(0 0,100% 0,' + (wTop + wBot) / 2 + 'px 100%,' + (wTop - wBot) / 2 + 'px 100%);' +
+            'transform-origin:50% 0;transform:rotateY(' + a + 'deg) translateZ(' + RT * Math.cos(rad) + 'px) rotateX(' + -tilt + 'deg)');
+          // Rim: a straight band a little wider than the top
+          add(pot, 'left:' + -wRim / 2 + 'px;top:' + (-H - 4) + 'px;width:' + wRim + 'px;height:' + RIM + 'px;' +
+            'background:' + shade(a, [212, 120, 86]) + ';backface-visibility:hidden;' +
+            'transform-origin:50% 0;transform:rotateY(' + a + 'deg) translateZ(' + (RT + 4) * Math.cos(rad) + 'px)');
+        }
+        add(pot, 'left:' + -RT + 'px;top:' + (-H + 4 - RT) + 'px;width:' + 2 * RT + 'px;height:' + 2 * RT + 'px;border-radius:50%;' +
+          'background:radial-gradient(circle at 45% 40%,#6b4a33,#3f2a1c);transform:rotateX(90deg)');
+        var sway = add(pot, 'left:0;top:0;width:0;height:0');
+        sway.className = 'splash-sway';
+        // Leaves as crossed flat shapes, so you see them turn with the pot
+        [[0, 0, 88, 32, '#6f8462'], [60, 14, 76, 28, '#7f9670'], [120, -12, 82, 30, '#5f7454'], [30, -26, 62, 24, '#8aa27a'], [150, 24, 66, 24, '#6f8462']]
+          .forEach(function (l) {
+            add(sway, 'left:' + -l[3] / 2 + 'px;top:' + (-H + 6 - l[2]) + 'px;transform-origin:50% 100%;transform:rotateY(' + l[0] + 'deg) rotateZ(' + l[1] + 'deg)',
+              '<svg width="' + l[3] + '" height="' + l[2] + '" viewBox="0 0 40 100" style="display:block"><path d="M20 100 C2 70 2 30 20 0 C38 30 38 70 20 100Z" fill="' + l[4] + '"/><path d="M20 98 L20 8" stroke="rgba(255,255,255,.35)" stroke-width="2"/></svg>');
+          });
+        // Safety net: if the app itself fails to start, don't hide its error
+        // message behind the loading screen forever
+        setTimeout(function () {
+          var s = document.getElementById('splash');
+          if (s) s.remove();
+        }, 12000);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -14,6 +14,9 @@ interface HouseholdContextValue {
   purchases: Purchase[];
   earned: number;
   balance: number;
+  // True once the household, points and cat purchases have loaded (used by
+  // the loading screen, so the cat doesn't flash "hungry" with 0 data)
+  ready: boolean;
 }
 
 const HouseholdContext = createContext<HouseholdContextValue | undefined>(undefined);
@@ -26,6 +29,8 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [completionsLoaded, setCompletionsLoaded] = useState(false);
+  const [purchasesLoaded, setPurchasesLoaded] = useState(false);
 
   useEffect(() => {
     // Removed from the household by the other member (or it can no longer be
@@ -75,6 +80,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'households', householdId, 'completions'), (snap) => {
       setCompletions(snap.docs.map((d) => d.data() as Completion));
+      setCompletionsLoaded(true);
     });
     return unsub;
   }, [householdId]);
@@ -82,6 +88,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'households', householdId, 'purchases'), (snap) => {
       setPurchases(snap.docs.map((d) => d.data() as Purchase));
+      setPurchasesLoaded(true);
     });
     return unsub;
   }, [householdId]);
@@ -91,7 +98,15 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
 
   return (
     <HouseholdContext.Provider
-      value={{ householdId, household, memberNames, purchases, earned, balance: earned - spent }}
+      value={{
+        householdId,
+        household,
+        memberNames,
+        purchases,
+        earned,
+        balance: earned - spent,
+        ready: household !== null && completionsLoaded && purchasesLoaded,
+      }}
     >
       {children}
     </HouseholdContext.Provider>

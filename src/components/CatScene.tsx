@@ -1,10 +1,13 @@
-import type { CatLook, CatMood, DayPart, Season } from '../data/catShop';
+import { createContext, useContext } from 'react';
+import { coatPalette } from '../data/catShop';
+import type { CatCoat, CatLook, CatMood, CoatPalette, DayPart, Season } from '../data/catShop';
 
 // What the cat is doing right now (decided in CatScreen)
 export type CatPose = 'sit' | 'groom' | 'play' | 'lie';
 
-// Amber eyes, like the real one
-const EYE = '#e3b23c';
+// Colours of the chosen cat (zwart-wit / cyperse / rode kater). Shared via
+// context so every part of the drawing (poses, the photo frame) matches.
+const CoatContext = createContext<CoatPalette>(coatPalette('tuxedo'));
 
 // Where each toy is, so the cat can turn/shuffle towards it to play
 export const TOY_SPOTS: Record<string, { side: 'left' | 'right'; shift: number }> = {
@@ -52,7 +55,9 @@ export default function CatScene({
   onToy,
   onBed,
   onBowl,
+  coat,
 }: {
+  coat?: CatCoat;
   pose?: CatPose;
   activeToy?: string | null;
   onToy?: (id: string) => void;
@@ -91,6 +96,7 @@ export default function CatScene({
   });
 
   return (
+    <CoatContext.Provider value={coatPalette(coat)}>
     <svg viewBox={`0 0 ${W} ${H}`} className="cat-scene" role="img" aria-label="Jullie kat in zijn huisje">
       <SceneDefs />
 
@@ -231,6 +237,7 @@ export default function CatScene({
         <circle cx="548" cy={top + 80} r="70" fill="url(#lamp-glow)" pointerEvents="none" />
       )}
     </svg>
+    </CoatContext.Provider>
   );
 }
 
@@ -334,6 +341,7 @@ function Window({ dayPart, season }: { dayPart: DayPart; season: Season }) {
 
 // Level 1: windowsill with plants and a framed photo
 function CozyExtras() {
+  const c = useContext(CoatContext);
   return (
     <g>
       <rect x="226" y="96" width="104" height="8" rx="2" fill="#fbf7f1" />
@@ -346,9 +354,16 @@ function CozyExtras() {
       <line x1="251" y1="75" x2="251" y2="86" stroke="#5d7353" strokeWidth="1" />
       {/* Photo frame with a tiny portrait of the cat */}
       <rect x="22" y="22" width="50" height="42" rx="3" fill="#f4ece2" stroke="#9c6b43" strokeWidth="5" />
-      <circle cx="47" cy="47" r="10" fill="#1d1b1a" />
-      <path d="M38 41 l-2 -10 l8 6 z M56 41 l2 -10 l-8 6 z" fill="#1d1b1a" />
-      <path d="M47 42 c-2 4 -4 8 -7 9 c2 5 12 5 14 0 c-3 -1 -5 -5 -7 -9 z" fill="#fbfaf7" />
+      <circle cx="47" cy="47" r="10" fill={c.fur} />
+      <path d="M38 41 l-2 -10 l8 6 z M56 41 l2 -10 l-8 6 z" fill={c.fur} />
+      {c.blaze ? (
+        <path d="M47 42 c-2 4 -4 8 -7 9 c2 5 12 5 14 0 c-3 -1 -5 -5 -7 -9 z" fill={c.white} />
+      ) : (
+        <>
+          <ellipse cx="47" cy="52" rx="6" ry="4" fill={c.white} />
+          <path d="M44 38 v5 M47 37 v6 M50 38 v5" stroke={c.stripe ?? c.fur} strokeWidth="1.4" strokeLinecap="round" />
+        </>
+      )}
     </g>
   );
 }
@@ -472,6 +487,9 @@ function Pumpkin() {
 }
 
 // The cat itself, drawn in its own 200×220 coordinate box
+// The sitting cat's tail
+const TAIL = 'M140 196 C 185 196, 200 160, 182 128 C 176 118, 166 124, 172 134 C 184 156, 172 182, 136 184 Z';
+
 function Cat({
   mood,
   sleeping,
@@ -487,6 +505,7 @@ function Cat({
   variant?: 'sit' | 'groom' | 'play';
   side?: 'left' | 'right';
 }) {
+  const c = useContext(CoatContext);
   const grooming = variant === 'groom';
   const playing = variant === 'play';
   // Grooming: eyes shut in bliss; playing: wide, focused eyes
@@ -495,69 +514,106 @@ function Cat({
   const headTilt = grooming ? -10 : playing ? (side === 'right' ? 8 : -8) : 0;
   return (
     <>
-      {/* Tail */}
-      <path
-        className={`cat-tail${playing ? ' cat-tail-fast' : ''}`}
-        d="M140 196 C 185 196, 200 160, 182 128 C 176 118, 166 124, 172 134 C 184 156, 172 182, 136 184 Z"
-        fill="#1d1b1a"
-      />
+      {/* Tail (with tabby rings, clipped so they stay inside the tail) */}
+      <g className={`cat-tail${playing ? ' cat-tail-fast' : ''}`}>
+        <clipPath id="cat-tail-shape">
+          <path d={TAIL} />
+        </clipPath>
+        <path d={TAIL} fill={c.fur} />
+        {c.stripe && (
+          <g clipPath="url(#cat-tail-shape)" stroke={c.stripe} strokeWidth="5" strokeLinecap="round">
+            <path d="M160 200 l10 -14" />
+            <path d="M178 178 l16 -6" />
+            <path d="M182 156 l16 0" />
+            <path d="M178 138 l14 6" />
+          </g>
+        )}
+      </g>
       {/* Body */}
       <g className="cat-body">
-        <ellipse cx="100" cy="160" rx="54" ry="52" fill="#1d1b1a" />
-        <path d="M100 118 C 76 128, 72 190, 84 208 L 116 208 C 128 190, 124 128, 100 118 Z" fill="#fbfaf7" />
-        <ellipse cx="80" cy="207" rx="15" ry="9" fill="#fbfaf7" />
-        <ellipse cx="120" cy="207" rx="15" ry="9" fill="#fbfaf7" />
+        <ellipse cx="100" cy="160" rx="54" ry="52" fill={c.fur} />
+        {/* Tabby stripes along the sides */}
+        {c.stripe && (
+          <g stroke={c.stripe} strokeWidth="4.5" fill="none" strokeLinecap="round">
+            <path d="M50 146 q10 5 20 1" />
+            <path d="M47 163 q11 5 22 1" />
+            <path d="M51 180 q10 5 20 1" />
+            <path d="M150 146 q-10 5 -20 1" />
+            <path d="M153 163 q-11 5 -22 1" />
+            <path d="M149 180 q-10 5 -20 1" />
+          </g>
+        )}
+        <path d="M100 118 C 76 128, 72 190, 84 208 L 116 208 C 128 190, 124 128, 100 118 Z" fill={c.white} />
+        <ellipse cx="80" cy="207" rx="15" ry="9" fill={c.white} />
+        <ellipse cx="120" cy="207" rx="15" ry="9" fill={c.white} />
       </g>
       {/* Playing: one leg reaches out to bat at the toy (mirrored for the left) */}
       {playing && (
         <g transform={side === 'left' ? 'translate(200 0) scale(-1 1)' : undefined}>
           <g className="cat-bat">
-            <path d="M128 158 C 160 160, 176 190, 180 210" stroke="#1d1b1a" strokeWidth="17" fill="none" strokeLinecap="round" />
-            <ellipse cx="182" cy="212" rx="12" ry="8" fill="#fbfaf7" />
+            <path d="M128 158 C 160 160, 176 190, 180 210" stroke={c.fur} strokeWidth="17" fill="none" strokeLinecap="round" />
+            <ellipse cx="182" cy="212" rx="12" ry="8" fill={c.white} />
           </g>
         </g>
       )}
 
       {/* Head */}
       <g className="cat-head" transform={headTilt ? `rotate(${headTilt} 100 130)` : undefined}>
-        <path d="M58 70 L 56 22 L 92 50 Z" fill="#1d1b1a" />
-        <path d="M142 70 L 144 22 L 108 50 Z" fill="#1d1b1a" />
-        <path d="M64 58 L 62 34 L 82 50 Z" fill="#e8a3ad" />
-        <path d="M136 58 L 138 34 L 118 50 Z" fill="#e8a3ad" />
-        <circle cx="100" cy="88" r="48" fill="#1d1b1a" />
-        {/* White blaze + muzzle */}
-        <path d="M100 58 C 94 74, 88 92, 74 104 C 80 128, 120 128, 126 104 C 112 92, 106 74, 100 58 Z" fill="#fbfaf7" />
+        <path d="M58 70 L 56 22 L 92 50 Z" fill={c.fur} />
+        <path d="M142 70 L 144 22 L 108 50 Z" fill={c.fur} />
+        <path d="M64 58 L 62 34 L 82 50 Z" fill={c.earInner} />
+        <path d="M136 58 L 138 34 L 118 50 Z" fill={c.earInner} />
+        <circle cx="100" cy="88" r="48" fill={c.fur} />
+        {c.blaze ? (
+          // Tuxedo: white blaze up the forehead + muzzle
+          <path d="M100 58 C 94 74, 88 92, 74 104 C 80 128, 120 128, 126 104 C 112 92, 106 74, 100 58 Z" fill={c.white} />
+        ) : (
+          <>
+            {/* Light muzzle and chin */}
+            <path d="M100 94 C 88 96, 76 102, 75 110 C 80 130, 120 130, 125 110 C 124 102, 112 96, 100 94 Z" fill={c.white} />
+            {/* The tabby "M" on the forehead and stripes on the cheeks */}
+            <g stroke={c.stripe ?? c.fur} strokeWidth="4" fill="none" strokeLinecap="round">
+              <path d="M86 46 q3 10 1 20" />
+              <path d="M100 42 v22" />
+              <path d="M114 46 q-3 10 -1 20" />
+              <path d="M54 92 q8 3 15 0" />
+              <path d="M56 103 q7 2 13 -2" />
+              <path d="M146 92 q-8 3 -15 0" />
+              <path d="M144 103 q-7 2 -13 -2" />
+            </g>
+          </>
+        )}
 
         {/* Eyes */}
         {sleeping ? (
           <>
-            <path d="M72 86 q9 7 18 0" stroke="#f3e9c6" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-            <path d="M110 86 q9 7 18 0" stroke="#f3e9c6" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+            <path d="M72 86 q9 7 18 0" stroke={c.lidLine} strokeWidth="3.5" fill="none" strokeLinecap="round" />
+            <path d="M110 86 q9 7 18 0" stroke={c.lidLine} strokeWidth="3.5" fill="none" strokeLinecap="round" />
           </>
         ) : happyEyes ? (
           <>
-            <path d="M72 88 q9 -10 18 0" stroke="#f3e9c6" strokeWidth="4" fill="none" strokeLinecap="round" />
-            <path d="M110 88 q9 -10 18 0" stroke="#f3e9c6" strokeWidth="4" fill="none" strokeLinecap="round" />
+            <path d="M72 88 q9 -10 18 0" stroke={c.lidLine} strokeWidth="4" fill="none" strokeLinecap="round" />
+            <path d="M110 88 q9 -10 18 0" stroke={c.lidLine} strokeWidth="4" fill="none" strokeLinecap="round" />
           </>
         ) : (
           <g className="cat-eyes">
-            <ellipse cx="81" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill={EYE} />
-            <ellipse cx="119" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill={EYE} />
+            <ellipse cx="81" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill={c.eye} />
+            <ellipse cx="119" cy="86" rx="9" ry={mood === 'bored' ? 6 : 10} fill={c.eye} />
             <ellipse cx="81" cy="86" rx={playing ? 6 : 3} ry={mood === 'hungry' || playing ? 8 : 6} fill="#111" />
             <ellipse cx="119" cy="86" rx={playing ? 6 : 3} ry={mood === 'hungry' || playing ? 8 : 6} fill="#111" />
             <circle cx="84" cy="82" r="2" fill="#fff" />
             <circle cx="122" cy="82" r="2" fill="#fff" />
             {mood === 'bored' && (
               <>
-                <rect x="70" y="76" width="22" height="6" fill="#1d1b1a" />
-                <rect x="108" y="76" width="22" height="6" fill="#1d1b1a" />
+                <rect x="70" y="76" width="22" height="6" fill={c.fur} />
+                <rect x="108" y="76" width="22" height="6" fill={c.fur} />
               </>
             )}
             {mood === 'hungry' && (
               <>
                 {/* Brows rising towards the middle = sad, not angry */}
-                <path d="M70 74 l20 -6" stroke="#f3e9c6" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M130 74 l-20 -6" stroke="#f3e9c6" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M70 74 l20 -6" stroke={c.lidLine} strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M130 74 l-20 -6" stroke={c.lidLine} strokeWidth="2.5" strokeLinecap="round" />
               </>
             )}
           </g>
@@ -600,8 +656,8 @@ function Cat({
       {/* Grooming: a white paw raised to the mouth, licked up and down */}
       {grooming && (
         <g className="cat-groom-paw">
-          <path d="M118 178 C 130 160, 126 136, 112 124" stroke="#1d1b1a" strokeWidth="18" fill="none" strokeLinecap="round" />
-          <ellipse cx="108" cy="121" rx="12" ry="9" fill="#fbfaf7" stroke="#cfc6ba" strokeWidth="2" />
+          <path d="M118 178 C 130 160, 126 136, 112 124" stroke={c.fur} strokeWidth="18" fill="none" strokeLinecap="round" />
+          <ellipse cx="108" cy="121" rx="12" ry="9" fill={c.white} stroke="#cfc6ba" strokeWidth="2" />
           <path d="M102 116 v6 M108 115 v7 M114 116 v6" stroke="#e3dbd0" strokeWidth="1.5" strokeLinecap="round" />
         </g>
       )}
@@ -612,37 +668,65 @@ function Cat({
 // Curled up in a ball with the paws tucked under the chin — his favourite
 // way to nap. Drawn in the same 200×220 box as the sitting cat.
 function CatLying({ sleeping, hat }: { sleeping: boolean; hat: string | null }) {
+  const c = useContext(CoatContext);
   return (
     <g className="cat-lying">
       <g className="cat-body">
-        <ellipse cx="118" cy="180" rx="74" ry="40" fill="#1d1b1a" />
+        <ellipse cx="118" cy="180" rx="74" ry="40" fill={c.fur} />
+        {/* Tabby stripes over the back */}
+        {c.stripe && (
+          <g stroke={c.stripe} strokeWidth="4.5" fill="none" strokeLinecap="round">
+            <path d="M106 143 q5 10 1 20" />
+            <path d="M126 141 q5 10 1 20" />
+            <path d="M146 144 q5 10 1 20" />
+            <path d="M166 152 q4 8 1 16" />
+          </g>
+        )}
         {/* Tail wrapped around the front */}
-        <path d="M188 186 C 204 214, 128 228, 66 216 C 54 214, 56 205, 66 206 C 116 213, 172 206, 172 190 Z" fill="#1d1b1a" />
-        <ellipse cx="76" cy="196" rx="20" ry="12" fill="#fbfaf7" />
-        <ellipse cx="58" cy="207" rx="13" ry="7" fill="#fbfaf7" />
-        <ellipse cx="82" cy="210" rx="13" ry="7" fill="#fbfaf7" />
+        <path d="M188 186 C 204 214, 128 228, 66 216 C 54 214, 56 205, 66 206 C 116 213, 172 206, 172 190 Z" fill={c.fur} />
+        {c.stripe && (
+          <g stroke={c.stripe} strokeWidth="4" strokeLinecap="round">
+            <path d="M178 196 l8 6" />
+            <path d="M150 210 l4 8" />
+            <path d="M120 214 l2 8" />
+          </g>
+        )}
+        <ellipse cx="76" cy="196" rx="20" ry="12" fill={c.white} />
+        <ellipse cx="58" cy="207" rx="13" ry="7" fill={c.white} />
+        <ellipse cx="82" cy="210" rx="13" ry="7" fill={c.white} />
       </g>
       <g className="cat-head">
-        <path d="M32 150 L24 114 L54 134 Z" fill="#1d1b1a" />
-        <path d="M74 134 L96 110 L94 146 Z" fill="#1d1b1a" />
-        <path d="M34 142 L30 122 L48 134 Z" fill="#e8a3ad" />
-        <path d="M78 134 L92 118 L90 140 Z" fill="#e8a3ad" />
-        <circle cx="60" cy="164" r="36" fill="#1d1b1a" />
-        <path d="M60 144 C 56 156, 48 168, 40 174 C 44 192, 78 192, 82 174 C 72 168, 64 156, 60 144 Z" fill="#fbfaf7" />
+        <path d="M32 150 L24 114 L54 134 Z" fill={c.fur} />
+        <path d="M74 134 L96 110 L94 146 Z" fill={c.fur} />
+        <path d="M34 142 L30 122 L48 134 Z" fill={c.earInner} />
+        <path d="M78 134 L92 118 L90 140 Z" fill={c.earInner} />
+        <circle cx="60" cy="164" r="36" fill={c.fur} />
+        {c.blaze ? (
+          <path d="M60 144 C 56 156, 48 168, 40 174 C 44 192, 78 192, 82 174 C 72 168, 64 156, 60 144 Z" fill={c.white} />
+        ) : (
+          <>
+            <path d="M60 168 C 51 169, 44 174, 43 179 C 47 193, 73 193, 77 179 C 76 174, 69 169, 60 168 Z" fill={c.white} />
+            <g stroke={c.stripe ?? c.fur} strokeWidth="3.5" fill="none" strokeLinecap="round">
+              <path d="M51 133 q2 7 1 13" />
+              <path d="M60 131 v15" />
+              <path d="M69 133 q-2 7 -1 13" />
+            </g>
+          </>
+        )}
         {sleeping ? (
           <>
-            <path d="M40 162 q8 6 15 0" stroke="#f3e9c6" strokeWidth="3" fill="none" strokeLinecap="round" />
-            <path d="M66 162 q8 6 15 0" stroke="#f3e9c6" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d="M40 162 q8 6 15 0" stroke={c.lidLine} strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d="M66 162 q8 6 15 0" stroke={c.lidLine} strokeWidth="3" fill="none" strokeLinecap="round" />
           </>
         ) : (
           <>
             {/* Lazy half-open eyes */}
-            <ellipse cx="47" cy="163" rx="7" ry="5" fill={EYE} />
-            <ellipse cx="73" cy="163" rx="7" ry="5" fill={EYE} />
+            <ellipse cx="47" cy="163" rx="7" ry="5" fill={c.eye} />
+            <ellipse cx="73" cy="163" rx="7" ry="5" fill={c.eye} />
             <ellipse cx="47" cy="164" rx="2.2" ry="4" fill="#111" />
             <ellipse cx="73" cy="164" rx="2.2" ry="4" fill="#111" />
-            <rect x="38" y="155" width="18" height="5" fill="#1d1b1a" />
-            <rect x="64" y="155" width="18" height="5" fill="#1d1b1a" />
+            <rect x="38" y="155" width="18" height="5" fill={c.fur} />
+            <rect x="64" y="155" width="18" height="5" fill={c.fur} />
           </>
         )}
         <path d="M56 175 h8 l-4 5 z" fill="#d9808d" />

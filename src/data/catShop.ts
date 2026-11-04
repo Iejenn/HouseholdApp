@@ -53,6 +53,42 @@ export const SLOT_LABELS: Record<CosmeticSlot, { label: string; none: string }> 
 // What the cat currently wears / how the room looks (stored on the household)
 export type CatLook = Partial<Record<CosmeticSlot, string | null>>;
 
+// ── Which cat you have (free choice, per household) ──────────────────
+export type CatCoat = 'tuxedo' | 'tabby' | 'ginger';
+
+export interface CoatPalette {
+  fur: string;
+  white: string; // chest, paws, muzzle
+  eye: string;
+  stripe: string | null; // tabby markings, null = none
+  earInner: string;
+  lidLine: string; // closed eyes and brows: light on dark fur, dark on light fur
+  blaze: boolean; // the tuxedo's white stripe up the forehead
+}
+
+export const COATS: { id: CatCoat; label: string; palette: CoatPalette }[] = [
+  {
+    id: 'tuxedo',
+    label: 'Zwart-wit',
+    palette: { fur: '#1d1b1a', white: '#fbfaf7', eye: '#e3b23c', stripe: null, earInner: '#e8a3ad', lidLine: '#f3e9c6', blaze: true },
+  },
+  {
+    // Grey-brown tabby with the "M" on the forehead and a light chin/chest
+    id: 'tabby',
+    label: 'Cyperse',
+    palette: { fur: '#8b7d6c', white: '#f1ebe2', eye: '#b8c27a', stripe: '#4b4239', earInner: '#e6b7ab', lidLine: '#3a322b', blaze: false },
+  },
+  {
+    id: 'ginger',
+    label: 'Rode kater',
+    palette: { fur: '#e08a3c', white: '#fbf1e2', eye: '#c7b13a', stripe: '#b45c1e', earInner: '#f2b9a6', lidLine: '#6e3812', blaze: false },
+  },
+];
+
+export function coatPalette(coat: CatCoat | undefined): CoatPalette {
+  return (COATS.find((c) => c.id === coat) ?? COATS[0]).palette;
+}
+
 // ── The house grows with the total number of tasks done together ──────
 // Free milestones (no points spent), so working hard stays visible.
 export const HOUSE_LEVELS = [

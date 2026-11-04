@@ -12,7 +12,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': the plugin itself never reloads the page; src/lib/updates.ts
+      // decides when (right away if you just opened the app, otherwise via a
+      // "Vernieuwen" bar). The service worker still installs immediately.
+      registerType: 'prompt',
+      // We register it ourselves in src/lib/updates.ts
+      injectRegister: false,
       // Our own service worker (src/sw/sw.ts) instead of a generated one,
       // because it also has to show push notifications
       strategies: 'injectManifest',

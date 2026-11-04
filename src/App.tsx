@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { releaseSplash } from './lib/splash';
+import UpdateBar from './components/UpdateBar';
 import './App.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -172,6 +173,8 @@ export default function App() {
     <AuthProvider>
       {/* Android Chrome only: suggests installing the app to the home screen */}
       <InstallPrompt />
+      {/* "Er is een nieuwe versie · Vernieuwen" after a deploy */}
+      <UpdateBar />
       <GlobalErrorBar />
       <ErrorBoundary>
         <RootRouter />

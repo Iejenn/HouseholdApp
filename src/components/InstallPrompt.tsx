@@ -96,7 +96,8 @@ export default function InstallPrompt() {
               ? 'Zet de app op je startscherm, dan heb je hem altijd bij de hand.'
               : 'Installeer de app op je computer: hij opent dan in een eigen venster.'
             : isIOS
-              ? 'Tik op Deel ⬆️ en kies "Zet op beginscherm".'
+              ? // Newer iOS hides it one step deeper, behind "Toon meer" (tester feedback)
+                'Tik op Deel ⬆️, dan op "Toon meer" en kies "Zet op beginscherm".'
               : 'Tik in Chrome op ⋮ en kies "Toevoegen aan startscherm".'}
         </p>
       </div>

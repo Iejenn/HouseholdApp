@@ -41,6 +41,8 @@ export interface Household {
   catName?: string;
   // Chosen wallpaper/floor/collar/hat for the cat (ids from data/catShop)
   catLook?: Partial<Record<'wall' | 'floor' | 'collar' | 'hat', string | null>>;
+  // Which cat: 'tuxedo' (default), 'tabby' or 'ginger' (see data/catShop COATS)
+  catCoat?: 'tuxedo' | 'tabby' | 'ginger';
   // Where the weather on the home screen is for (rounded to ~1 km)
   location?: WeatherLocation;
   // Vacation mode for the whole household (the cat is shared). The last few

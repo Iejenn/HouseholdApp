@@ -4,7 +4,7 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
-import CatScene from '../components/CatScene';
+import CatScene, { CatThumb } from '../components/CatScene';
 import SectionCard from '../components/SectionCard';
 import type { CatPose } from '../components/CatScene';
 import {
@@ -17,7 +17,8 @@ import {
   houseLevel,
   season as getSeason,
 } from '../data/catShop';
-import type { CatMood, CosmeticSlot, ShopItem } from '../data/catShop';
+import { COATS } from '../data/catShop';
+import type { CatCoat, CatMood, CosmeticSlot, ShopItem } from '../data/catShop';
 import { isTaskDone } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Purchase, Task } from '../types';
@@ -80,6 +81,8 @@ export default function CatScreen() {
   const { user } = useAuth();
   const { householdId, household, purchases, balance, earned } = useHousehold();
   const [petting, setPetting] = useState(false);
+  // "Jullie kat" popup (name + which cat) open
+  const [editingCat, setEditingCat] = useState(false);
   const [speech, setSpeech] = useState<string | null>(null);
   const speechTimer = useRef<number | null>(null);
   const [busyItem, setBusyItem] = useState<string | null>(null);
@@ -176,15 +179,6 @@ export default function CatScreen() {
     return () => window.clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function rename() {
-    const nextName = window.prompt('Hoe heet jullie kat?', name)?.trim();
-    if (!nextName || nextName === name) return;
-    try {
-      await updateDoc(doc(db, 'households', householdId), { catName: nextName.slice(0, 24) });
-    } catch (err) {
-      setError(dutchError(err, 'Kon de naam niet opslaan.'));
-    }
-  }
 
   async function wear(slot: CosmeticSlot, itemId: string | null) {
     setError(null);
@@ -227,7 +221,7 @@ export default function CatScreen() {
       <div className="app-header">
         <div>
           <h2 className="household-name">
-            <button className="cat-name-btn" onClick={rename} aria-label="Naam van de kat wijzigen">
+            <button className="cat-name-btn" onClick={() => setEditingCat(true)} aria-label="Naam en uiterlijk van de kat wijzigen">
               {name} <span className="cat-name-edit">✎</span>
             </button>
           </h2>
@@ -258,6 +252,7 @@ export default function CatScreen() {
                   fullness={cat.fullness}
                   owned={cat.owned}
                   look={look}
+                  coat={household?.catCoat}
                   level={level}
                   dayPart={part}
                   season={getSeason(now)}
@@ -372,6 +367,15 @@ export default function CatScreen() {
           </div>
         </div>
       </div>
+
+      {editingCat && (
+        <CatSettings
+          householdId={householdId}
+          name={name}
+          coat={household?.catCoat ?? 'tuxedo'}
+          onClose={() => setEditingCat(false)}
+        />
+      )}
     </>
   );
 }
@@ -386,6 +390,81 @@ function StatBar({ label, emoji, value, warn }: { label: string; emoji: string; 
         <div className={`stat-fill${warn ? ' warn' : ''}`} style={{ width: `${value}%` }} />
       </div>
       <span className="stat-value">{value}%</span>
+    </div>
+  );
+}
+
+// "Jullie kat": name plus which cat (zwart-wit, cyperse, rode kater), in the
+// app's own style instead of the browser's plain prompt. Saved for the whole
+// household, so you both see the same cat.
+function CatSettings({
+  householdId,
+  name,
+  coat,
+  onClose,
+}: {
+  householdId: string;
+  name: string;
+  coat: CatCoat;
+  onClose: () => void;
+}) {
+  const [nextName, setNextName] = useState(name);
+  const [nextCoat, setNextCoat] = useState<CatCoat>(coat);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    const trimmed = nextName.trim();
+    if (!trimmed) {
+      setError('Geef de kat een naam.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateDoc(doc(db, 'households', householdId), { catName: trimmed.slice(0, 24), catCoat: nextCoat });
+      onClose();
+    } catch (err) {
+      setError(dutchError(err, 'Opslaan lukte niet.'));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">Jullie kat</h3>
+        <span className="field-label">Naam</span>
+        <input
+          className="input"
+          value={nextName}
+          onChange={(e) => setNextName(e.target.value)}
+          maxLength={24}
+          placeholder="Hoe heet jullie kat?"
+          style={{ marginBottom: 16 }}
+        />
+        <span className="field-label">Welke kat?</span>
+        <div className="coat-grid">
+          {COATS.map((c) => (
+            <button
+              key={c.id}
+              className={`coat-option${nextCoat === c.id ? ' active' : ''}`}
+              onClick={() => setNextCoat(c.id)}
+              aria-pressed={nextCoat === c.id}
+            >
+              <CatThumb coat={c.id} />
+              <span className="coat-label">{c.label}</span>
+              {nextCoat === c.id && <span className="coat-selected">Geselecteerd</span>}
+            </button>
+          ))}
+        </div>
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+        <button className="btn btn-primary btn-block" onClick={save} disabled={busy} style={{ margin: '16px 0 8px' }}>
+          {busy ? 'Even geduld…' : 'Opslaan'}
+        </button>
+        <button className="btn btn-ghost btn-block" onClick={onClose}>
+          Annuleren
+        </button>
+      </div>
     </div>
   );
 }

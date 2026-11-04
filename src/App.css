@@ -2104,3 +2104,8 @@
   font-weight: 700;
   color: var(--color-primary);
 }
+
+/* New-version bar: above everything else at the bottom */
+.update-bar {
+  z-index: 60;
+}

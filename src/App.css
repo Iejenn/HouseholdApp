@@ -1260,6 +1260,13 @@
   font-size: 13px;
   color: var(--color-ink-soft);
   font-weight: 600;
+  /* Fixed width, so the › button doesn't jump when "3 – 9 mrt" becomes
+     "10 – 16 mrt" and you can keep tapping it. Fits the widest label
+     ("26 mrt – 1 apr", ~79px at this size). */
+  width: 6.6em;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .menu-actions {

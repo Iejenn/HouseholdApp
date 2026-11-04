@@ -1,8 +1,10 @@
 import { groceryKey } from './groceries';
 import type { DayKey, Recipe, WeekMenu } from '../types';
 
-// Friday is chips day unless you pick something else for that week
-export const DEFAULT_DISHES: Partial<Record<DayKey, string>> = { fri: 'Patat' };
+// Fixed dishes per weekday. Was { fri: 'Patat' } (our own Friday habit), but
+// that would show up for every household, so it's empty now. The code below
+// still supports it, should this become a per-household setting later.
+export const DEFAULT_DISHES: Partial<Record<DayKey, string>> = {};
 
 // What's on the plate for one day, resolved from the stored value
 export type Planned =

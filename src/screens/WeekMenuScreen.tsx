@@ -55,7 +55,7 @@ export default function WeekMenuScreen() {
     window.setTimeout(() => setInfo((cur) => (cur === text ? null : cur)), 3500);
   }
 
-  // value: a recipe id, null = nothing, 'default' = back to the default (Patat)
+  // value: a recipe id, null = nothing, 'default' = back to the day's default (none at the moment)
   async function setDay(week: string, key: DayKey, value: string | null | 'default') {
     try {
       // merge: only this one day changes, so you can both plan at the same time

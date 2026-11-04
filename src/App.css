@@ -1696,6 +1696,13 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  /* A button now (tap to react), but it should still look like paper */
+  width: 100%;
+  border: none;
+  color: var(--color-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   box-shadow: 0 6px 12px rgba(46, 42, 38, 0.12), 0 1px 2px rgba(46, 42, 38, 0.08);
   border-radius: 2px 2px 14px 2px;
   user-select: none;
@@ -1711,22 +1718,103 @@
 }
 
 .postit-text {
-  font-family: var(--font-display);
-  font-size: 15px;
-  line-height: 1.35;
+  display: block;
+  /* font: each writer's own handwriting, set in src/lib/notes.ts */
+  line-height: 1.3;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .postit-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
   margin-top: 8px;
   font-size: 11px;
   color: rgba(46, 42, 38, 0.6);
   text-align: right;
 }
 
+/* Reactions and replies on a post-it */
+.postit-reactions {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.postit-replies {
+  display: block;
+  margin-top: 6px;
+}
+
+.postit-reply {
+  display: block;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(46, 42, 38, 0.18);
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.postit-more {
+  display: block;
+  font-size: 11px;
+  color: rgba(46, 42, 38, 0.55);
+}
+
+/* The opened post-it in the reaction window: straight and a bit bigger */
+.postit-open {
+  cursor: default;
+  min-height: 0;
+  margin: 10px 0 16px;
+  padding: 20px 16px 12px;
+}
+
+.reaction-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.reaction-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 14px;
+  border: 1.5px solid var(--color-line);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.reaction-btn.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-tint);
+}
+
+.reaction-emoji {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.reaction-who {
+  font-size: 11px;
+  color: var(--color-ink-soft);
+}
+
+.reply-form {
+  display: flex;
+  gap: 8px;
+}
+
+.reply-form .input {
+  flex: 1;
+  min-width: 0;
+}
+
 .postit-input {
-  font-family: var(--font-display);
   border: none;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
   resize: none;

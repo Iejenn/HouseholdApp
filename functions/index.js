@@ -3,7 +3,7 @@
 import './init.js';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
@@ -73,6 +73,60 @@ export const notifyChatMessage = onDocumentCreated(
         })
       )
     );
+  }
+);
+
+// Someone reacted to a post-it (emoji or a short reply). Uses the same
+// "Briefjes op het prikbord" switch as new post-its.
+export const notifyNoteReaction = onDocumentUpdated(
+  'households/{householdId}/messages/{messageId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+    const { householdId, messageId } = event.params;
+    const noteText = shorten(String(after.text ?? ''), 40);
+    const nameOf = async (uid) => (await db.collection('users').doc(uid).get()).get('displayName') ?? 'Je partner';
+    const sends = [];
+
+    // New or changed emoji (taking one back sends nothing). Only the writer of
+    // the note hears about it, and not about their own reactions.
+    const was = before.reactions ?? {};
+    for (const [uid, emoji] of Object.entries(after.reactions ?? {})) {
+      if (was[uid] === emoji || uid === after.senderId) continue;
+      const to = await recipients(householdId, uid, 'chat');
+      if (!to.includes(after.senderId)) continue;
+      const name = await nameOf(uid);
+      sends.push(
+        sendToUser(after.senderId, {
+          title: `${emoji} ${name}`,
+          body: `reageerde op je briefje: "${noteText}"`,
+          tab: 'home',
+          tag: `note-${messageId}`,
+        })
+      );
+    }
+
+    // New written reply: goes to everyone else in the household (in practice
+    // your partner), so the writer can also answer back
+    const known = new Set((before.replies ?? []).map((r) => `${r.uid}|${r.at}`));
+    for (const reply of after.replies ?? []) {
+      if (known.has(`${reply.uid}|${reply.at}`)) continue;
+      const to = await recipients(householdId, reply.uid, 'chat');
+      if (to.length === 0) continue;
+      const name = await nameOf(reply.uid);
+      for (const uid of to) {
+        sends.push(
+          sendToUser(uid, {
+            title: `💬 ${name} op "${noteText}"`,
+            body: shorten(String(reply.text ?? '')),
+            tab: 'home',
+            tag: `note-${messageId}`,
+          })
+        );
+      }
+    }
+    await Promise.all(sends);
   }
 );
 

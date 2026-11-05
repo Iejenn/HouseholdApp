@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { releaseSplash } from './lib/splash';
 import UpdateBar from './components/UpdateBar';
+import WhatsNew, { markWhatsNewSeen, unseenEntries } from './components/WhatsNew';
+import type { ChangelogEntry } from './data/changelog';
 import './App.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -17,6 +19,7 @@ import { dutchError } from './lib/firebaseErrors';
 import InstallPrompt from './components/InstallPrompt';
 import { ErrorBoundary, GlobalErrorBar } from './components/ErrorBoundary';
 import { HouseholdProvider } from './context/HouseholdContext';
+import { LanguageProvider, t } from './i18n';
 
 type Tab = 'home' | 'tasks' | 'groceries' | 'menu' | 'cat' | 'settings';
 
@@ -40,19 +43,34 @@ function toTab(value: unknown): Tab | null {
   return isTab(value) ? value : null;
 }
 
-// A tapped notification opens the app as …/?tab=groceries
+// A tapped notification opens the app as …/?tab=groceries. Otherwise the tab
+// you were on (so switching language, which redraws everything, keeps you
+// in Instellingen), else Thuis.
 function tabFromUrl(): Tab {
-  return toTab(new URLSearchParams(window.location.search).get('tab')) ?? 'home';
+  let last: string | null = null;
+  try {
+    last = sessionStorage.getItem('tab');
+  } catch {
+    // no storage
+  }
+  return toTab(new URLSearchParams(window.location.search).get('tab')) ?? toTab(last) ?? 'home';
 }
 
 function MainShell() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  // "Wat is er nieuw" after an update (once per device)
+  const [whatsNew, setWhatsNew] = useState<ChangelogEntry[]>(() => unseenEntries(profile?.createdAt));
   const [tab, setTab] = useState<Tab>(tabFromUrl);
   // Where ⚙️ returns to when tapped again
   const [lastTab, setLastTab] = useState<Tab>('home');
   // Opened on another tab (e.g. from a notification): don't wait for Thuis
   useEffect(() => {
     if (tab !== 'home') releaseSplash();
+    try {
+      sessionStorage.setItem('tab', tab);
+    } catch {
+      // fine without
+    }
   }, [tab]);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -85,16 +103,16 @@ function MainShell() {
     window.history.replaceState(null, '', import.meta.env.BASE_URL);
     setTab('settings');
     if (denied || !code) {
-      setNotice('Agenda koppelen geannuleerd.');
+      setNotice(t('Agenda koppelen geannuleerd.'));
       return;
     }
-    setNotice('Agenda koppelen…');
+    setNotice(t('Agenda koppelen…'));
     finishCalendarLink(code, state)
       .then(({ email }) => {
         forgetCachedEvents();
-        setNotice(`Gekoppeld met ${email || 'Google'} ✓ Kies hieronder welke agenda's je deelt.`);
+        setNotice(t("Gekoppeld met {email} ✓ Kies hieronder welke agenda's je deelt.", { email: email || 'Google' }));
       })
-      .catch((err) => setNotice(dutchError(err, 'Koppelen lukte niet. Probeer het opnieuw.')));
+      .catch((err) => setNotice(dutchError(err, t('Koppelen lukte niet. Probeer het opnieuw.'))));
   }, []);
 
   useEffect(() => {
@@ -132,20 +150,29 @@ function MainShell() {
         <button
           className={`settings-btn${tab === 'settings' ? ' active' : ''}`}
           onClick={toggleSettings}
-          aria-label={tab === 'settings' ? 'Instellingen sluiten' : 'Instellingen'}
+          aria-label={tab === 'settings' ? t('Instellingen sluiten') : t('Instellingen')}
         >
           {tab === 'settings' ? '✕' : '⚙️'}
         </button>
         {notice && <div className="undo-toast info-toast">{notice}</div>}
+        {whatsNew.length > 0 && (
+          <WhatsNew
+            entries={whatsNew}
+            onClose={() => {
+              markWhatsNewSeen();
+              setWhatsNew([]);
+            }}
+          />
+        )}
         <nav className="tabbar">
-          {TABS.map((t) => (
+          {TABS.map((item) => (
             <button
-              key={t.id}
-              className={`tabbar-item${tab === t.id ? ' active' : ''}`}
-              onClick={() => setTab(t.id)}
+              key={item.id}
+              className={`tabbar-item${tab === item.id ? ' active' : ''}`}
+              onClick={() => setTab(item.id)}
             >
-              <span className="tabbar-icon">{t.icon}</span>
-              {t.label}
+              <span className="tabbar-icon">{item.icon}</span>
+              {t(item.label)}
             </button>
           ))}
         </nav>
@@ -171,14 +198,17 @@ function RootRouter() {
 export default function App() {
   return (
     <AuthProvider>
-      {/* Android Chrome only: suggests installing the app to the home screen */}
-      <InstallPrompt />
-      {/* "Er is een nieuwe versie · Vernieuwen" after a deploy */}
-      <UpdateBar />
-      <GlobalErrorBar />
-      <ErrorBoundary>
-        <RootRouter />
-      </ErrorBoundary>
+      {/* Dutch or English, from your profile (or the phone's language) */}
+      <LanguageProvider>
+        {/* Suggests installing the app to the home screen */}
+        <InstallPrompt />
+        {/* "Er is een nieuwe versie · Vernieuwen" after a deploy */}
+        <UpdateBar />
+        <GlobalErrorBar />
+        <ErrorBoundary>
+          <RootRouter />
+        </ErrorBoundary>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

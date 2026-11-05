@@ -12,6 +12,7 @@ import { collection, doc, getDocs, limit, onSnapshot, query, setDoc, where } fro
 import { auth, db } from '../firebaseConfig';
 import { disablePush } from '../lib/push';
 import type { UserProfile } from '../types';
+import { currentLang, t } from '../i18n/core';
 
 interface AuthContextValue {
   user: User | null;
@@ -62,13 +63,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfileError(null);
         } else {
           setProfile(null);
-          setProfileError(`Je account bestaat, maar je profiel ontbreekt in de database (users/${user.uid}).`);
+          setProfileError(t('Je account bestaat, maar je profiel ontbreekt in de database (users/{uid}).', { uid: user.uid }));
         }
         setLoading(false);
       },
       (err) => {
         setProfile(null);
-        setProfileError(`Je profiel kon niet geladen worden: ${err.code ?? err.message} (users/${user.uid})`);
+        setProfileError(
+          t('Je profiel kon niet geladen worden: {error} (users/{uid})', { error: err.code ?? err.message, uid: user.uid })
+        );
         setLoading(false);
       }
     );
@@ -82,6 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName,
       householdId: null,
       createdAt: Date.now(),
+      // The language the app is in right now (the phone's, or what they picked)
+      language: currentLang(),
     };
     await setDoc(doc(db, 'users', cred.user.uid), newProfile);
   }

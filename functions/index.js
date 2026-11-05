@@ -6,6 +6,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { tr } from './i18n.js';
 
 const db = getFirestore();
 
@@ -15,10 +16,18 @@ const TIME_ZONE = 'Europe/Amsterdam';
 
 // Sends to every device a user turned notifications on for. Only data (no
 // "notification" block), so the service worker decides how it looks.
-async function sendToUser(uid, { title, body, tab, tag }) {
+// `message` can be a function of the receiver's language ('nl' / 'en'), so
+// everyone gets the notification in the language they use the app in.
+async function sendToUser(uid, message) {
   const snap = await db.collection('users').doc(uid).collection('pushTokens').get();
   const tokens = snap.docs.map((d) => d.id);
   if (tokens.length === 0) return;
+  let msg = message;
+  if (typeof message === 'function') {
+    const lang = (await db.collection('users').doc(uid).get()).get('language') ?? 'nl';
+    msg = message(lang);
+  }
+  const { title, body, tab, tag } = msg;
 
   const res = await getMessaging().sendEachForMulticast({
     tokens,
@@ -65,12 +74,12 @@ export const notifyChatMessage = onDocumentCreated(
     const to = await recipients(event.params.householdId, msg.senderId, 'chat');
     await Promise.all(
       to.map((uid) =>
-        sendToUser(uid, {
-          title: `💬 ${msg.senderName ?? 'Nieuw bericht'}`,
+        sendToUser(uid, (L) => ({
+          title: `💬 ${msg.senderName ?? tr(L, 'Nieuw bericht')}`,
           body: shorten(String(msg.text ?? '')),
           tab: 'chat',
           tag: 'chat',
-        })
+        }))
       )
     );
   }
@@ -98,12 +107,12 @@ export const notifyNoteReaction = onDocumentUpdated(
       if (!to.includes(after.senderId)) continue;
       const name = await nameOf(uid);
       sends.push(
-        sendToUser(after.senderId, {
+        sendToUser(after.senderId, (L) => ({
           title: `${emoji} ${name}`,
-          body: `reageerde op je briefje: "${noteText}"`,
+          body: tr(L, 'reageerde op je briefje: "{note}"', { note: noteText }),
           tab: 'home',
           tag: `note-${messageId}`,
-        })
+        }))
       );
     }
 
@@ -117,12 +126,12 @@ export const notifyNoteReaction = onDocumentUpdated(
       const name = await nameOf(reply.uid);
       for (const uid of to) {
         sends.push(
-          sendToUser(uid, {
-            title: `💬 ${name} op "${noteText}"`,
+          sendToUser(uid, (L) => ({
+            title: `💬 ${tr(L, '{name} op "{note}"', { name, note: noteText })}`,
             body: shorten(String(reply.text ?? '')),
             tab: 'home',
             tag: `note-${messageId}`,
-          })
+          }))
         );
       }
     }
@@ -137,11 +146,11 @@ const GROCERY_GATHER_MS = 60 * 1000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function listNames(texts) {
+function listNames(texts, L) {
   const quoted = texts.map((t) => `"${t}"`);
   if (quoted.length === 1) return quoted[0];
-  if (quoted.length <= 4) return `${quoted.slice(0, -1).join(', ')} en ${quoted.at(-1)}`;
-  return `${quoted.slice(0, 3).join(', ')} en nog ${quoted.length - 3} meer`;
+  if (quoted.length <= 4) return tr(L, '{first} en {last}', { first: quoted.slice(0, -1).join(', '), last: quoted.at(-1) });
+  return tr(L, '{first} en nog {n} meer', { first: quoted.slice(0, 3).join(', '), n: quoted.length - 3 });
 }
 
 export const notifyGroceryAdded = onDocumentCreated(
@@ -187,14 +196,20 @@ export const notifyGroceryAdded = onDocumentCreated(
     const to = await recipients(householdId, adderUid, 'groceries');
     if (to.length === 0) return;
     const adder = await db.collection('users').doc(adderUid).get();
-    const name = adder.get('displayName') ?? 'Je partner';
-    const body =
-      texts.length === 1
-        ? `${name} zette ${listNames(texts)} op de lijst`
-        : `${name} zette ${texts.length} dingen op de lijst: ${listNames(texts)}`;
+    const body = (L) => {
+      const name = adder.get('displayName') ?? tr(L, 'Je partner');
+      return texts.length === 1
+        ? tr(L, '{name} zette {items} op de lijst', { name, items: listNames(texts, L) })
+        : tr(L, '{name} zette {n} dingen op de lijst: {items}', { name, n: texts.length, items: listNames(texts, L) });
+    };
     await Promise.all(
       to.map((uid) =>
-        sendToUser(uid, { title: '🛒 Boodschappen', body: shorten(body), tab: 'groceries', tag: 'groceries' })
+        sendToUser(uid, (L) => ({
+          title: tr(L, '🛒 Boodschappen'),
+          body: shorten(body(L)),
+          tab: 'groceries',
+          tag: 'groceries',
+        }))
       )
     );
   }
@@ -281,24 +296,30 @@ export const dailyReminder = onSchedule(
       }
       const paused = pausedMs(lastFood, now, household.get('vacations') ?? []);
       const fullness = lastFood ? 100 * (1 - (now - lastFood - paused) / FOOD_LASTS_MS) : 0;
-      const catName = household.get('catName')?.trim() || 'Poes';
+      const hungry = fullness < HUNGRY_BELOW;
+      if (dueToday.length === 0 && lateCount === 0 && !hungry) continue; // nothing to nag about today
 
-      const parts = [];
-      if (dueToday.length === 1) parts.push(`"${shorten(String(dueToday[0].title), 40)}" moet vandaag`);
-      if (dueToday.length > 1) parts.push(`${dueToday.length} taken moeten vandaag`);
-      if (lateCount > 0) parts.push(`${lateCount} ${lateCount === 1 ? 'taak is' : 'taken zijn'} te laat`);
-      if (fullness < HUNGRY_BELOW) parts.push(`${catName} heeft honger 🥣`);
-      if (parts.length === 0) continue; // nothing to nag about today
+      // Built per receiver, in their language
+      const parts = (L) => {
+        const catName = household.get('catName')?.trim() || tr(L, 'Poes');
+        const out = [];
+        if (dueToday.length === 1) out.push(tr(L, '"{title}" moet vandaag', { title: shorten(String(dueToday[0].title), 40) }));
+        if (dueToday.length > 1) out.push(tr(L, '{n} taken moeten vandaag', { n: dueToday.length }));
+        if (lateCount === 1) out.push(tr(L, '1 taak is te laat'));
+        if (lateCount > 1) out.push(tr(L, '{n} taken zijn te laat', { n: lateCount }));
+        if (hungry) out.push(tr(L, '{name} heeft honger 🥣', { name: catName }));
+        return out;
+      };
 
       const to = await recipients(household.id, null, 'daily');
       await Promise.all(
         to.map((uid) =>
-          sendToUser(uid, {
-            title: '☀️ Goedemorgen!',
-            body: parts.join(' · '),
+          sendToUser(uid, (L) => ({
+            title: tr(L, '☀️ Goedemorgen!'),
+            body: parts(L).join(' · '),
             tab: lateCount > 0 || dueToday.length > 0 ? 'tasks' : 'cat',
             tag: 'daily',
-          })
+          }))
         )
       );
     }
@@ -309,16 +330,17 @@ export const dailyReminder = onSchedule(
 // Monday morning: who did how much last week, and which room got the most
 // love. Labels mirror src/data/taskCatalog.ts.
 
+// [emoji, Dutch label]; the label is translated per receiver (functions/i18n.js)
 const GROUP_LABELS = {
-  stofzuigen: '🧹 Stofzuigen',
-  dweilen: '🪣 Dweilen',
-  badkamer: '🛁 Badkamer',
-  keuken: '🍳 Keuken',
-  woonkamer: '🛋️ Woonkamer',
-  slaapkamer: '🛏️ Slaapkamer',
-  was: '🧺 Was',
-  afval: '🗑️ Afval',
-  tuin: '🌿 Tuin & balkon',
+  stofzuigen: ['🧹', 'Stofzuigen'],
+  dweilen: ['🪣', 'Dweilen'],
+  badkamer: ['🛁', 'Badkamer'],
+  keuken: ['🍳', 'Keuken'],
+  woonkamer: ['🛋️', 'Woonkamer'],
+  slaapkamer: ['🛏️', 'Slaapkamer'],
+  was: ['🧺', 'Was'],
+  afval: ['🗑️', 'Afval'],
+  tuin: ['🌿', 'Tuin & balkon'],
 };
 
 export const weeklySummary = onSchedule(
@@ -334,8 +356,6 @@ export const weeklySummary = onSchedule(
         household.ref.collection('tasks').get(),
       ]);
       const memberIds = household.get('memberIds') ?? [];
-      const catName = household.get('catName')?.trim() || 'Poes';
-
       const perUser = new Map();
       const perGroup = new Map();
       const categoryOf = new Map(tasks.docs.map((t) => [t.id, t.get('category')]));
@@ -346,26 +366,37 @@ export const weeklySummary = onSchedule(
         if (group && GROUP_LABELS[group]) perGroup.set(group, (perGroup.get(group) ?? 0) + 1);
       }
 
-      let body;
-      if (completions.size === 0) {
-        body = `Een rustige week: geen taken afgevinkt. ${catName} rekent deze week op jullie! 🐾`;
-      } else {
-        const names = await Promise.all(
-          memberIds.map(async (uid) => {
-            const u = await db.collection('users').doc(uid).get();
-            return `${u.get('displayName') ?? '?'} ${perUser.get(uid) ?? 0}`;
-          })
+      const names =
+        completions.size === 0
+          ? []
+          : await Promise.all(
+              memberIds.map(async (uid) => {
+                const u = await db.collection('users').doc(uid).get();
+                return `${u.get('displayName') ?? '?'} ${perUser.get(uid) ?? 0}`;
+              })
+            );
+      const top = [...perGroup.entries()].sort((a, b) => b[1] - a[1])[0];
+
+      // Built per receiver, in their language
+      const body = (L) => {
+        if (completions.size === 0) {
+          const catName = household.get('catName')?.trim() || tr(L, 'Poes');
+          return tr(L, 'Een rustige week: geen taken afgevinkt. {name} rekent deze week op jullie! 🐾', { name: catName });
+        }
+        const scores = names.join(' · ');
+        const room = top ? `${GROUP_LABELS[top[0]][0]} ${tr(L, GROUP_LABELS[top[0]][1])}` : null;
+        return (
+          (completions.size === 1 ? tr(L, '{scores} taak.', { scores }) : tr(L, '{scores} taken.', { scores })) +
+          (room ? ` ${tr(L, 'Meeste aandacht: {room}.', { room })}` : '') +
+          ` ${tr(L, 'Samen {n} 🐾 verdiend!', { n: completions.size })}`
         );
-        const top = [...perGroup.entries()].sort((a, b) => b[1] - a[1])[0];
-        body =
-          `${names.join(' · ')} ${completions.size === 1 ? 'taak' : 'taken'}.` +
-          (top ? ` Meeste aandacht: ${GROUP_LABELS[top[0]]}.` : '') +
-          ` Samen ${completions.size} 🐾 verdiend!`;
-      }
+      };
 
       const to = await recipients(household.id, null, 'weekly');
       await Promise.all(
-        to.map((uid) => sendToUser(uid, { title: '📊 Jullie week', body, tab: 'tasks', tag: 'weekly' }))
+        to.map((uid) =>
+          sendToUser(uid, (L) => ({ title: tr(L, '📊 Jullie week'), body: body(L), tab: 'tasks', tag: 'weekly' }))
+        )
       );
     }
   }
@@ -403,12 +434,12 @@ export const nudgeTask = onCall(async (request) => {
   const name = sender.get('displayName') ?? 'Je partner';
   await Promise.all(
     to.map((other) =>
-      sendToUser(other, {
-        title: `👉 ${name} port je`,
-        body: shorten(`Kun je "${task.get('title')}" doen? 🙏`),
+      sendToUser(other, (L) => ({
+        title: tr(L, '👉 {name} port je', { name }),
+        body: shorten(tr(L, 'Kun je "{title}" doen? 🙏', { title: task.get('title') })),
         tab: 'tasks',
         tag: `nudge-${taskId}`,
-      })
+      }))
     )
   );
   await taskRef.update({ lastNudgedAt: Date.now(), lastNudgedBy: uid });
@@ -419,12 +450,12 @@ export const nudgeTask = onCall(async (request) => {
 
 export const sendTestPush = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Log eerst in.');
-  await sendToUser(request.auth.uid, {
-    title: '🔔 Testmelding',
-    body: 'Het werkt! Zo zien jullie meldingen eruit.',
+  await sendToUser(request.auth.uid, (L) => ({
+    title: tr(L, '🔔 Testmelding'),
+    body: tr(L, 'Het werkt! Zo zien jullie meldingen eruit.'),
     tab: 'tasks',
     tag: 'test',
-  });
+  }));
   return { ok: true };
 });
 

@@ -3,6 +3,7 @@ import { deleteToken, getMessaging, getToken, isSupported, onMessage } from 'fir
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, db } from '../firebaseConfig';
 import { VAPID_KEY } from '../firebaseOptions';
+import { t } from '../i18n/core';
 
 // This phone's token is remembered so it can be removed again on sign-out
 const TOKEN_KEY = 'pushToken';
@@ -98,7 +99,7 @@ export async function listenForTestPush(): Promise<() => void> {
     const data = payload.data ?? {};
     if (data.tag !== 'test') return;
     const registration = await navigator.serviceWorker.ready;
-    registration.showNotification(data.title ?? 'Huishouden', {
+    registration.showNotification(data.title ?? t('Huishouden'), {
       body: data.body,
       icon: `${import.meta.env.BASE_URL}icon-192.png`,
       tag: 'test',

@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import { coatPalette } from '../data/catShop';
 import type { CatCoat, CatLook, CatMood, CoatPalette, DayPart, Season } from '../data/catShop';
+import { t } from '../i18n';
 
 // What the cat is doing right now (decided in CatScreen)
 export type CatPose = 'sit' | 'groom' | 'play' | 'lie';
@@ -97,7 +98,7 @@ export default function CatScene({
 
   return (
     <CoatContext.Provider value={coatPalette(coat)}>
-    <svg viewBox={`0 0 ${W} ${H}`} className="cat-scene" role="img" aria-label="Jullie kat in zijn huisje">
+    <svg viewBox={`0 0 ${W} ${H}`} className="cat-scene" role="img" aria-label={t('Jullie kat in zijn huisje')}>
       <SceneDefs />
 
       {level >= 3 && <Attic width={W} dayPart={dayPart} />}

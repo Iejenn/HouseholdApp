@@ -27,6 +27,7 @@ import { byDeadline, formatAgo, formatDeadline, isHiddenDone, isTaskDone, isTask
 import { useUndoCheck } from '../hooks/useUndoCheck';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Recurrence, RecurrenceUnit, Task } from '../types';
+import { t } from '../i18n';
 
 
 const UNIT_LABELS: Record<RecurrenceUnit, [string, string]> = {
@@ -36,9 +37,10 @@ const UNIT_LABELS: Record<RecurrenceUnit, [string, string]> = {
 };
 
 function formatRecurrence({ unit, interval }: Recurrence): string {
-  if (interval === 1) return unit === 'day' ? 'elke dag' : `elke ${UNIT_LABELS[unit][0]}`;
-  if (unit === 'week' && interval === 2) return 'om de week';
-  return `elke ${interval} ${UNIT_LABELS[unit][1]}`;
+  if (interval === 1) return unit === 'day' ? t('elke dag') : unit === 'week' ? t('elke week') : t('elke maand');
+  if (unit === 'week' && interval === 2) return t('om de week');
+  if (unit === 'day') return t('elke {n} dagen', { n: interval });
+  return unit === 'week' ? t('elke {n} weken', { n: interval }) : t('elke {n} maanden', { n: interval });
 }
 
 export default function TaskListScreen() {
@@ -98,7 +100,7 @@ export default function TaskListScreen() {
   if (!household) {
     return (
       <div className="centered-screen">
-        <p style={{ color: 'var(--color-ink-soft)' }}>Huishouden laden…</p>
+        <p style={{ color: 'var(--color-ink-soft)' }}>{t('Huishouden laden…')}</p>
       </div>
     );
   }
@@ -126,7 +128,7 @@ export default function TaskListScreen() {
     const group = findTaskGroup(item.category);
     const recurring = item.isRecurring && item.recurrence;
     const late = !isDone && isTaskLate(item, now);
-    const who = item.assignedTo ? memberNames[item.assignedTo] ?? '…' : 'Allebei';
+    const who = item.assignedTo ? memberNames[item.assignedTo] ?? '…' : t('Allebei');
     const doneBy = item.completedBy ? memberNames[item.completedBy] ?? '…' : '…';
 
     // Recurring tasks show when they were last done instead of being struck through
@@ -134,9 +136,9 @@ export default function TaskListScreen() {
     if (recurring) {
       const lastDone = item.completedAt
         ? isDone
-          ? `${formatAgo(item.completedAt, now)} gedaan door ${doneBy}`
-          : `laatst ${formatAgo(item.completedAt, now)}`
-        : 'nog nooit gedaan';
+          ? t('{when} gedaan door {name}', { when: formatAgo(item.completedAt, now), name: doneBy })
+          : t('laatst {when}', { when: formatAgo(item.completedAt, now) })
+        : t('nog nooit gedaan');
       meta = (
         <>
           {!isDone && `${who} · `}
@@ -153,13 +155,13 @@ export default function TaskListScreen() {
         </>
       );
     } else {
-      meta = isDone ? `Gedaan door ${doneBy}` : who;
+      meta = isDone ? t('Gedaan door {name}', { name: doneBy }) : who;
     }
     // Show for a day that someone asked for this to be done
     if (!isDone && item.lastNudgedAt && now - item.lastNudgedAt < 24 * 60 * 60 * 1000) {
       meta = (
         <>
-          {meta} · <span className="task-nudged">👉 gepord</span>
+          {meta} · <span className="task-nudged">{t('👉 gepord')}</span>
         </>
       );
     }
@@ -169,13 +171,13 @@ export default function TaskListScreen() {
         key={item.id}
         onDelete={() => swipe.remove(item)}
         onSwipeLeft={() => setEditingTask(item)}
-        leftLabel="✏️ Bewerken · 👉 Porren"
+        leftLabel={t('✏️ Bewerken · 👉 Porren')}
       >
         <div className={`task-row${late ? ' late' : ''}`}>
           <button
             className={`task-checkbox${isDone ? ' done' : ''}`}
             onClick={() => toggleComplete(item)}
-            aria-label={isDone ? 'Markeer als niet gedaan' : 'Markeer als gedaan'}
+            aria-label={isDone ? t('Markeer als niet gedaan') : t('Markeer als gedaan')}
           >
             {isDone ? '✓' : ''}
             {pointPopId === item.id && <span className="point-pop">+1 🐾</span>}
@@ -193,7 +195,7 @@ export default function TaskListScreen() {
               className={`heart-btn${isBursting ? ' just-hearted' : ''}`}
               onClick={() => canHeart && toggleHeart(item)}
               disabled={!canHeart}
-              aria-label={iHearted ? 'Hartje weghalen' : 'Stuur een hartje'}
+              aria-label={iHearted ? t('Hartje weghalen') : t('Stuur een hartje')}
             >
               <span className="heart-emoji">{item.hearts.length > 0 ? '❤️' : '🤍'}</span>
               {isBursting && (
@@ -223,18 +225,18 @@ export default function TaskListScreen() {
           <h2 className="household-name">{household.name}</h2>
           <span className="invite-code">{household.inviteCode}</span>
         </div>
-        <span className="points-pill" title="Punten voor de kat">
+        <span className="points-pill" title={t('Punten voor de kat')}>
           🐾 {balance}
         </span>
       </div>
 
       <div className="app-content">
         {open.length === 0 && done.length === 0 && (
-          <p className="empty-state">Nog geen taken — tik op + om er een toe te voegen.</p>
+          <p className="empty-state">{t('Nog geen taken — tik op + om er een toe te voegen.')}</p>
         )}
         {open.length === 0 && done.length > 0 && (
           <p className="empty-state" style={{ padding: '24px 20px' }}>
-            Alles gedaan! 🎉
+            {t('Alles gedaan! 🎉')}
           </p>
         )}
 
@@ -248,10 +250,10 @@ export default function TaskListScreen() {
               <SectionCard
                 key={groupId ?? 'overig'}
                 color={group?.color ?? OTHER_GROUP_COLOR}
-                title={group ? `${group.emoji} ${group.label}` : '📌 Overig'}
+                title={group ? `${group.emoji} ${t(group.label)}` : t('📌 Overig')}
                 aside={
                   <span className={`section-count${lateCount ? ' late' : ''}`}>
-                    {lateCount ? `${lateCount} te laat · ` : ''}
+                    {lateCount ? `${t('{n} te laat', { n: lateCount })} · ` : ''}
                     {groupTasks.length}
                   </span>
                 }
@@ -264,7 +266,7 @@ export default function TaskListScreen() {
           {done.length > 0 && (
             <SectionCard
               color="#e9e6e0"
-              title="✓ Gedaan"
+              title={t('✓ Gedaan')}
               aside={<span className="section-count">{done.length}</span>}
             >
               {done.map((t) => renderTask(t, true))}
@@ -274,7 +276,7 @@ export default function TaskListScreen() {
         
         {tasks.length > 0 && (
           <p className="swipe-hint">
-            Swipe naar rechts om te verwijderen, naar links om te bewerken of te porren
+            {t('Swipe naar rechts om te verwijderen, naar links om te bewerken of te porren')}
           </p>
         )}
       </div>
@@ -284,7 +286,7 @@ export default function TaskListScreen() {
         <UndoToast label={undoCheck.pending.title} action="afgevinkt" onUndo={undoCheck.undo} />
       )}
 
-      <button className="fab" onClick={() => setShowAddModal(true)} aria-label="Taak toevoegen">
+      <button className="fab" onClick={() => setShowAddModal(true)} aria-label={t('Taak toevoegen')}>
         +
       </button>
 
@@ -361,11 +363,11 @@ function AddTaskModal({
       if (ok) setNudgeState('sent');
       else {
         setNudgeState('idle');
-        setNudgeError('Je partner heeft porren uitgezet, of nog geen meldingen aan.');
+        setNudgeError(t('Je partner heeft porren uitgezet, of nog geen meldingen aan.'));
       }
     } catch (err) {
       setNudgeState('idle');
-      setNudgeError(dutchError(err, 'Porren lukte niet.'));
+      setNudgeError(dutchError(err, t('Porren lukte niet.')));
     }
   }
 
@@ -389,12 +391,12 @@ function AddTaskModal({
         ? [{ title: title.trim(), category: customCategory }]
         : []
       : group
-        ? picked.map((item) => ({ title: group.title(item, group.label), category: group.id }))
+        ? picked.map((item) => ({ title: group.title(t(item), t(group.label)), category: group.id }))
         : [];
 
   async function handleAdd() {
     if (newTitles.length === 0) {
-      setError(kind === 'custom' ? 'Geef de taak een naam.' : 'Kies minstens één taak.');
+      setError(kind === 'custom' ? t('Geef de taak een naam.') : t('Kies minstens één taak.'));
       return;
     }
     setBusy(true);
@@ -411,7 +413,7 @@ function AddTaskModal({
         });
         onClose();
       } catch (err) {
-        setError(dutchError(err, 'Opslaan lukte niet.'));
+        setError(dutchError(err, t('Opslaan lukte niet.')));
         setBusy(false);
       }
       return;
@@ -442,7 +444,7 @@ function AddTaskModal({
       await batch.commit();
       onClose();
     } catch (err) {
-      setError(dutchError(err, 'Kon de taak niet toevoegen.'));
+      setError(dutchError(err, t('Kon de taak niet toevoegen.')));
       setBusy(false);
     }
   }
@@ -450,7 +452,7 @@ function AddTaskModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">{editing ? 'Taak bewerken' : 'Nieuwe taak'}</h3>
+        <h3 className="modal-title">{editing ? t('Taak bewerken') : t('Nieuwe taak')}</h3>
 
         {editing && partner && (
           <div className="nudge-box">
@@ -460,14 +462,14 @@ function AddTaskModal({
               disabled={nudgeState !== 'idle'}
             >
               {nudgeState === 'sent'
-                ? `✓ ${memberNames[partner] ?? 'Je partner'} is gepord`
+                ? t('✓ {name} is gepord', { name: memberNames[partner] ?? t('Je partner') })
                 : nudgeState === 'busy'
-                  ? 'Even geduld…'
-                  : `👉 Por ${memberNames[partner] ?? 'je partner'}`}
+                  ? t('Even geduld…')
+                  : t('👉 Por {name}', { name: memberNames[partner] ?? t('je partner') })}
             </button>
             <p className="settings-note" style={{ margin: '6px 0 0' }}>
               {nudgeError ??
-                `${memberNames[partner] ?? 'Je partner'} krijgt een melding: "Kun je dit doen? 🙏"`}
+                t('{name} krijgt een melding: "Kun je dit doen? 🙏"', { name: memberNames[partner] ?? t('Je partner') })}
             </p>
           </div>
         )}
@@ -481,7 +483,7 @@ function AddTaskModal({
                 setError(null);
               }}
             >
-              Standaard taak
+              {t('Standaard taak')}
             </button>
             <button
               className={`segmented-item${kind === 'custom' ? ' active' : ''}`}
@@ -490,14 +492,14 @@ function AddTaskModal({
                 setError(null);
               }}
             >
-              Eigen taak
+              {t('Eigen taak')}
             </button>
           </div>
         )}
 
         {kind === 'standard' ? (
           <>
-            <span className="field-label">Ruimte of onderwerp</span>
+            <span className="field-label">{t('Ruimte of onderwerp')}</span>
             <div className="group-grid">
               {TASK_GROUPS.map((g) => (
                 <button
@@ -506,7 +508,7 @@ function AddTaskModal({
                   onClick={() => pickGroup(g.id)}
                 >
                   <span className="group-tile-emoji">{g.emoji}</span>
-                  {g.label}
+                  {t(g.label)}
                 </button>
               ))}
             </div>
@@ -514,7 +516,7 @@ function AddTaskModal({
             {group && (
               <>
                 <span className="field-label">
-                  {group.emoji} {group.label} — kies er een of meer
+                  {group.emoji} {t('{group} — kies er een of meer', { group: t(group.label) })}
                 </span>
                 <div className="chip-row">
                   {group.items.map((item) => (
@@ -524,7 +526,7 @@ function AddTaskModal({
                       onClick={() => togglePicked(item)}
                     >
                       {picked.includes(item) ? '✓ ' : ''}
-                      {item}
+                      {t(item)}
                     </button>
                   ))}
                 </div>
@@ -536,19 +538,19 @@ function AddTaskModal({
             <div style={{ marginBottom: 16 }}>
               <input
                 className="input"
-                placeholder="Wat moet er gebeuren?"
+                placeholder={t('Wat moet er gebeuren?')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 autoFocus
               />
             </div>
-            <span className="field-label">Ruimte of onderwerp</span>
+            <span className="field-label">{t('Ruimte of onderwerp')}</span>
             <div className="chip-row">
               <button
                 className={`chip${customCategory === null ? ' active' : ''}`}
                 onClick={() => setCustomCategory(null)}
               >
-                📌 Overig
+                {t('📌 Overig')}
               </button>
               {TASK_GROUPS.map((g) => (
                 <button
@@ -556,20 +558,20 @@ function AddTaskModal({
                   className={`chip${customCategory === g.id ? ' active' : ''}`}
                   onClick={() => setCustomCategory(g.id)}
                 >
-                  {g.emoji} {g.label}
+                  {g.emoji} {t(g.label)}
                 </button>
               ))}
             </div>
           </>
         )}
 
-        <span className="field-label">Voor wie</span>
+        <span className="field-label">{t('Voor wie')}</span>
         <div className="chip-row">
           <button
             className={`chip${assignedTo === null ? ' active' : ''}`}
             onClick={() => setAssignedTo(null)}
           >
-            Allebei
+            {t('Allebei')}
           </button>
           {memberIds.map((uid) => (
             <button
@@ -590,7 +592,7 @@ function AddTaskModal({
             style={{ width: 18, height: 18 }}
           />
           <span className="field-label" style={{ margin: 0 }}>
-            Herhalen
+            {t('Herhalen')}
           </span>
         </label>
 
@@ -598,13 +600,13 @@ function AddTaskModal({
 
         {isRecurring && (
           <>
-            <span className="field-label">Snel kiezen</span>
+            <span className="field-label">{t('Snel kiezen')}</span>
             <div className="chip-row">
               {([
-                { label: 'Dagelijks', unit: 'day', interval: 1 },
-                { label: 'Wekelijks', unit: 'week', interval: 1 },
-                { label: 'Om de week', unit: 'week', interval: 2 },
-                { label: 'Maandelijks', unit: 'month', interval: 1 },
+                { label: t('Dagelijks'), unit: 'day', interval: 1 },
+                { label: t('Wekelijks'), unit: 'week', interval: 1 },
+                { label: t('Om de week'), unit: 'week', interval: 2 },
+                { label: t('Maandelijks'), unit: 'month', interval: 1 },
               ] as const).map((p) => (
                 <button
                   key={p.label}
@@ -619,9 +621,9 @@ function AddTaskModal({
               ))}
             </div>
 
-            <span className="field-label">Of zelf instellen</span>
+            <span className="field-label">{t('Of zelf instellen')}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: 'var(--color-ink-soft)' }}>Elke</span>
+              <span style={{ fontSize: 14, color: 'var(--color-ink-soft)' }}>{t('Elke')}</span>
               <input
                 type="number"
                 min={1}
@@ -642,7 +644,7 @@ function AddTaskModal({
               >
                 {(['day', 'week', 'month'] as const).map((u) => (
                   <option key={u} value={u}>
-                    {UNIT_LABELS[u][interval > 1 ? 1 : 0]}
+                    {t(UNIT_LABELS[u][interval > 1 ? 1 : 0])}
                   </option>
                 ))}
               </select>
@@ -660,10 +662,10 @@ function AddTaskModal({
           disabled={busy}
           style={{ marginBottom: 8 }}
         >
-          {editing ? 'Opslaan' : newTitles.length > 1 ? `${newTitles.length} taken toevoegen` : 'Taak toevoegen'}
+          {editing ? t('Opslaan') : newTitles.length > 1 ? t('{n} taken toevoegen', { n: newTitles.length }) : t('Taak toevoegen')}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onClose}>
-          Annuleren
+          {t('Annuleren')}
         </button>
       </div>
     </div>
@@ -682,11 +684,11 @@ function DeadlinePicker({ value, onChange }: { value: number | null; onChange: (
   const weekday = today.getDay();
   const weekend = plus(weekday === 0 ? 0 : weekday === 6 ? 0 : 6 - weekday);
   const picks = [
-    { label: 'Geen', value: null },
-    { label: 'Vandaag', value: plus(0) },
-    { label: 'Morgen', value: plus(1) },
-    { label: 'Dit weekend', value: weekend },
-    { label: 'Over een week', value: plus(7) },
+    { label: t('Geen'), value: null },
+    { label: t('Vandaag'), value: plus(0) },
+    { label: t('Morgen'), value: plus(1) },
+    { label: t('Dit weekend'), value: weekend },
+    { label: t('Over een week'), value: plus(7) },
   ];
   // <input type="date"> works with "YYYY-MM-DD" in local time
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -697,7 +699,7 @@ function DeadlinePicker({ value, onChange }: { value: number | null; onChange: (
 
   return (
     <>
-      <span className="field-label">Uiterlijk op</span>
+      <span className="field-label">{t('Uiterlijk op')}</span>
       <div className="chip-row">
         {picks.map((p) => (
           <button

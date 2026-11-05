@@ -217,7 +217,7 @@ export const calendarEvents = onCall({ secrets: [clientSecret] }, async (request
         if (seen.has(key)) continue;
         seen.add(key);
         events.push({
-          title: e.summary || '(geen titel)',
+          title: e.summary || '', // the app shows "(geen titel)" in the right language
           start: e.start?.dateTime ?? e.start?.date,
           end: e.end?.dateTime ?? e.end?.date,
           allDay: !e.start?.dateTime,

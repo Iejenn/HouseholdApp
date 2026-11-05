@@ -22,24 +22,25 @@ import type { CatCoat, CatMood, CosmeticSlot, ShopItem } from '../data/catShop';
 import { isTaskDone } from '../lib/time';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Purchase, Task } from '../types';
+import { t } from '../i18n';
 
 const DEFAULT_CAT_NAME = 'Poes';
 
 function moodText(mood: CatMood, name: string, sleeping: boolean): string {
   if (sleeping) {
     return mood === 'hungry'
-      ? `${name} slaapt onrustig… de voerbak is leeg.`
-      : `Sssst… ${name} ligt te slapen. 😴`;
+      ? t('{name} slaapt onrustig… de voerbak is leeg.', { name })
+      : t('Sssst… {name} ligt te slapen. 😴', { name });
   }
   switch (mood) {
     case 'hungry':
-      return `Miauw! ${name} heeft honger. Vul de voerbak!`;
+      return t('Miauw! {name} heeft honger. Vul de voerbak!', { name });
     case 'bored':
-      return `${name} verveelt zich een beetje. Misschien een speeltje?`;
+      return t('{name} verveelt zich een beetje. Misschien een speeltje?', { name });
     case 'content':
-      return `${name} is tevreden.`;
+      return t('{name} is tevreden.', { name });
     case 'happy':
-      return `${name} is superblij en spint! 💕`;
+      return t('{name} is superblij en spint! 💕', { name });
   }
 }
 
@@ -55,19 +56,21 @@ const GENERIC_LINES = [
 
 // What the cat says when tapped: sometimes about a real open task
 function pickLine(mood: CatMood, sleeping: boolean, openTasks: Task[]): string {
-  if (sleeping) return 'Zzz… mrrrw… vijf minuutjes nog…';
-  if (mood === 'hungry') return 'Ik heb hónger! Vul mijn bakje, alsjeblieft. 🥺';
+  if (sleeping) return t('Zzz… mrrrw… vijf minuutjes nog…');
+  if (mood === 'hungry') return t('Ik heb hónger! Vul mijn bakje, alsjeblieft. 🥺');
   if (openTasks.length > 0 && Math.random() < 0.5) {
-    const t = openTasks[Math.floor(Math.random() * openTasks.length)];
-    return `Psst… "${t.title}" moet nog gebeuren. 👀`;
+    const task = openTasks[Math.floor(Math.random() * openTasks.length)];
+    return t('Psst… "{title}" moet nog gebeuren. 👀', { title: task.title });
   }
-  return GENERIC_LINES[Math.floor(Math.random() * GENERIC_LINES.length)];
+  return t(GENERIC_LINES[Math.floor(Math.random() * GENERIC_LINES.length)]);
 }
 
 const PLAY_LINES = ['Pak \'m! 🐾', 'Hebbes!', 'Nog een keer!', 'Kijk mij eens!', 'Wiebel wiebel…'];
-const pick = (lines: string[]) => lines[Math.floor(Math.random() * lines.length)];
+const pick = (lines: string[]) => t(lines[Math.floor(Math.random() * lines.length)]);
 
 // Each shop section is a card with its own header colour (week-menu look)
+// (titles are translated where shown: module-level text is created before
+// the language is known)
 const SHOP_SECTIONS: { title: string; color: string; match: (i: ShopItem) => boolean }[] = [
   { title: '🥣 Eten & snoep', color: '#f8dfd2', match: (i) => i.kind === 'food' || i.kind === 'treat' },
   { title: '🧶 Speelgoed & meubels', color: '#dbe8f5', match: (i) => i.kind === 'permanent' },
@@ -111,7 +114,7 @@ export default function CatScreen() {
   );
 
   const cat = computeCat(purchases, now, household?.vacations);
-  const name = household?.catName?.trim() || DEFAULT_CAT_NAME;
+  const name = household?.catName?.trim() || t(DEFAULT_CAT_NAME);
   const look = household?.catLook ?? {};
   const level = houseLevel(earned);
   const part = getDayPart(now);
@@ -144,25 +147,25 @@ export default function CatScreen() {
   }
 
   function playWith(toy: string) {
-    if (sleeping) return say('Zzz… morgen spelen…');
-    if (cat.mood === 'hungry') return say('Eerst eten! 🥣');
+    if (sleeping) return say(t('Zzz… morgen spelen…'));
+    if (cat.mood === 'hungry') return say(t('Eerst eten! 🥣'));
     act('play', 2800, toy);
     say(pick(PLAY_LINES));
   }
 
   function napInBed() {
-    if (sleeping) return say('Zzz…');
+    if (sleeping) return say(t('Zzz…'));
     act('lie', 20_000);
-    say('Even een dutje in mijn mand… 😌');
+    say(t('Even een dutje in mijn mand… 😌'));
   }
 
   function checkBowl() {
-    if (sleeping) return say('Zzz…');
+    if (sleeping) return say(t('Zzz…'));
     if (cat.fullness > 0) {
       act('groom', 3000);
-      say('Mmm, smikkelen! 😋');
+      say(t('Mmm, smikkelen! 😋'));
     } else {
-      say('Leeg… 😿 Vul je hem?');
+      say(t('Leeg… 😿 Vul je hem?'));
     }
   }
 
@@ -186,13 +189,13 @@ export default function CatScreen() {
       // Only this one field changes, so both of you can dress him up at once
       await updateDoc(doc(db, 'households', householdId), { [`catLook.${slot}`]: itemId });
     } catch (err) {
-      setError(dutchError(err, 'Opslaan lukte niet.'));
+      setError(dutchError(err, t('Opslaan lukte niet.')));
     }
   }
 
   function unavailableReason(item: ShopItem): string | null {
-    if ((item.kind === 'permanent' || item.kind === 'cosmetic') && cat.owned.has(item.id)) return 'In huis ✓';
-    if (item.kind === 'food' && cat.fullness >= REFILL_ALLOWED_BELOW) return 'Bak is nog vol';
+    if ((item.kind === 'permanent' || item.kind === 'cosmetic') && cat.owned.has(item.id)) return t('In huis ✓');
+    if (item.kind === 'food' && cat.fullness >= REFILL_ALLOWED_BELOW) return t('Bak is nog vol');
     return null; // not enough points shows as a greyed-out price instead
   }
 
@@ -207,7 +210,7 @@ export default function CatScreen() {
       if (item.kind === 'cosmetic' && item.slot) await wear(item.slot, item.id);
       pet();
     } catch (err) {
-      setError(dutchError(err, 'Kopen lukte niet.'));
+      setError(dutchError(err, t('Kopen lukte niet.')));
     } finally {
       setBusyItem(null);
     }
@@ -221,15 +224,15 @@ export default function CatScreen() {
       <div className="app-header">
         <div>
           <h2 className="household-name">
-            <button className="cat-name-btn" onClick={() => setEditingCat(true)} aria-label="Naam en uiterlijk van de kat wijzigen">
+            <button className="cat-name-btn" onClick={() => setEditingCat(true)} aria-label={t('Naam en uiterlijk van de kat wijzigen')}>
               {name} <span className="cat-name-edit">✎</span>
             </button>
           </h2>
           <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 2 }}>
-            Taken afvinken = punten voor {name}
+            {t('Taken afvinken = punten voor {name}', { name })}
           </p>
         </div>
-        <span className="points-pill" title="Punten om uit te geven">
+        <span className="points-pill" title={t('Punten om uit te geven')}>
           🐾 {balance}
         </span>
       </div>
@@ -269,19 +272,21 @@ export default function CatScreen() {
                 )}
               </div>
               <p className="cat-mood">{moodText(cat.mood, name, sleeping)}</p>
-              <p className="cat-hint">Tik op {name}, zijn speeltjes, mand of voerbak</p>
+              <p className="cat-hint">{t('Tik op {name}, zijn speeltjes, mand of voerbak', { name })}</p>
 
-              <StatBar label="Voerbak" emoji="🥣" value={cat.fullness} warn={cat.fullness < 25} />
-              <StatBar label="Geluk" emoji="💛" value={cat.happiness} warn={cat.happiness < 40} />
+              <StatBar label={t('Voerbak')} emoji="🥣" value={cat.fullness} warn={cat.fullness < 25} />
+              <StatBar label={t('Geluk')} emoji="💛" value={cat.happiness} warn={cat.happiness < 40} />
             </div>
 
             {/* House level: grows with the number of tasks done together */}
-            <SectionCard color="#d4ece4" title={`🏡 ${HOUSE_LEVELS[level].name}`} className="house-card">
+            <SectionCard color="#d4ece4" title={`🏡 ${t(HOUSE_LEVELS[level].name)}`} className="house-card">
               <div className="section-card-pad">
                 {next ? (
                   <>
                     <p className="settings-note" style={{ marginBottom: 8 }}>
-                      Nog {next.at - earned} {next.at - earned === 1 ? 'taak' : 'taken'} tot {next.unlocks}.
+                      {next.at - earned === 1
+                        ? t('Nog 1 taak tot {unlocks}.', { unlocks: t(next.unlocks) })
+                        : t('Nog {n} taken tot {unlocks}.', { n: next.at - earned, unlocks: t(next.unlocks) })}
                     </p>
                     <div className="stat-track">
                       <div
@@ -296,21 +301,21 @@ export default function CatScreen() {
                   </>
                 ) : (
                   <p className="settings-note" style={{ marginBottom: 0 }}>
-                    Het huis is helemaal af! Samen al {earned} taken gedaan. 🎉
+                    {t('Het huis is helemaal af! Samen al {n} taken gedaan. 🎉', { n: earned })}
                   </p>
                 )}
               </div>
             </SectionCard>
 
             {wardrobeSlots.length > 0 && (
-              <SectionCard color="#e6ddf3" title="🎨 Inrichten" className="house-card">
+              <SectionCard color="#e6ddf3" title={t('🎨 Inrichten')} className="house-card">
                 <div className="section-card-pad">
                   {wardrobeSlots.map((slot) => (
                     <div key={slot} style={{ marginBottom: 6 }}>
-                      <span className="field-label">{SLOT_LABELS[slot].label}</span>
+                      <span className="field-label">{t(SLOT_LABELS[slot].label)}</span>
                       <div className="chip-row" style={{ marginBottom: 6 }}>
                         <button className={`chip${!look[slot] ? ' active' : ''}`} onClick={() => wear(slot, null)}>
-                          {SLOT_LABELS[slot].none}
+                          {t(SLOT_LABELS[slot].none)}
                         </button>
                         {ownedBySlot(slot).map((i) => (
                           <button
@@ -318,7 +323,7 @@ export default function CatScreen() {
                             className={`chip${look[slot] === i.id ? ' active' : ''}`}
                             onClick={() => wear(slot, i.id)}
                           >
-                            {i.emoji} {i.name}
+                            {i.emoji} {t(i.name)}
                           </button>
                         ))}
                       </div>
@@ -331,9 +336,9 @@ export default function CatScreen() {
           <div className="cat-shop">
             {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: '12px 0' }}>{error}</p>}
 
-            <p className="section-label">Winkeltje</p>
+            <p className="section-label">{t('Winkeltje')}</p>
             {SHOP_SECTIONS.map((section) => (
-              <SectionCard key={section.title} color={section.color} title={section.title}>
+              <SectionCard key={section.title} color={section.color} title={t(section.title)}>
                 {SHOP_ITEMS.filter(section.match).map((item) => {
                   const reason = unavailableReason(item);
                   const tooExpensive = balance < item.cost;
@@ -341,8 +346,8 @@ export default function CatScreen() {
                     <div className="shop-row" key={item.id}>
                       <span className="shop-emoji">{item.emoji}</span>
                       <div className="task-info">
-                        <p className="task-title">{item.name}</p>
-                        <p className="task-meta">{item.description}</p>
+                        <p className="task-title">{t(item.name)}</p>
+                        <p className="task-meta">{t(item.description)}</p>
                       </div>
                       {reason ? (
                         <span className="shop-status">{reason}</span>
@@ -362,7 +367,9 @@ export default function CatScreen() {
             ))}
 
             <p className="cat-footnote">
-              Samen al {earned} {earned === 1 ? 'taak' : 'taken'} afgevinkt. Elke taak = 1 🐾.
+              {earned === 1
+                ? t('Samen al 1 taak afgevinkt. Elke taak = 1 🐾.')
+                : t('Samen al {n} taken afgevinkt. Elke taak = 1 🐾.', { n: earned })}
             </p>
           </div>
         </div>
@@ -416,7 +423,7 @@ function CatSettings({
   async function save() {
     const trimmed = nextName.trim();
     if (!trimmed) {
-      setError('Geef de kat een naam.');
+      setError(t('Geef de kat een naam.'));
       return;
     }
     setBusy(true);
@@ -424,7 +431,7 @@ function CatSettings({
       await updateDoc(doc(db, 'households', householdId), { catName: trimmed.slice(0, 24), catCoat: nextCoat });
       onClose();
     } catch (err) {
-      setError(dutchError(err, 'Opslaan lukte niet.'));
+      setError(dutchError(err, t('Opslaan lukte niet.')));
       setBusy(false);
     }
   }
@@ -432,17 +439,17 @@ function CatSettings({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Jullie kat</h3>
-        <span className="field-label">Naam</span>
+        <h3 className="modal-title">{t('Jullie kat')}</h3>
+        <span className="field-label">{t('Naam')}</span>
         <input
           className="input"
           value={nextName}
           onChange={(e) => setNextName(e.target.value)}
           maxLength={24}
-          placeholder="Hoe heet jullie kat?"
+          placeholder={t('Hoe heet jullie kat?')}
           style={{ marginBottom: 16 }}
         />
-        <span className="field-label">Welke kat?</span>
+        <span className="field-label">{t('Welke kat?')}</span>
         <div className="coat-grid">
           {COATS.map((c) => (
             <button
@@ -452,17 +459,17 @@ function CatSettings({
               aria-pressed={nextCoat === c.id}
             >
               <CatThumb coat={c.id} />
-              <span className="coat-label">{c.label}</span>
-              {nextCoat === c.id && <span className="coat-selected">Geselecteerd</span>}
+              <span className="coat-label">{t(c.label)}</span>
+              {nextCoat === c.id && <span className="coat-selected">{t('Geselecteerd')}</span>}
             </button>
           ))}
         </div>
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
         <button className="btn btn-primary btn-block" onClick={save} disabled={busy} style={{ margin: '16px 0 8px' }}>
-          {busy ? 'Even geduld…' : 'Opslaan'}
+          {busy ? t('Even geduld…') : t('Opslaan')}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onClose}>
-          Annuleren
+          {t('Annuleren')}
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import type { Recurrence, Task } from '../types';
+import { t } from '../i18n/core';
 
 // Checked-off tasks and groceries disappear from the lists after this long
 export const HIDE_DONE_AFTER_MS = 72 * 60 * 60 * 1000;
@@ -40,12 +41,12 @@ export function calendarDaysBetween(from: number, to: number): number {
 // "vandaag", "gisteren", "3 dagen geleden", "2 weken geleden", …
 export function formatAgo(ms: number, now: number): string {
   const days = calendarDaysBetween(ms, now);
-  if (days <= 0) return 'vandaag';
-  if (days === 1) return 'gisteren';
-  if (days < 14) return `${days} dagen geleden`;
-  if (days < 60) return `${Math.floor(days / 7)} weken geleden`;
+  if (days <= 0) return t('vandaag');
+  if (days === 1) return t('gisteren');
+  if (days < 14) return t('{n} dagen geleden', { n: days });
+  if (days < 60) return t('{n} weken geleden', { n: Math.floor(days / 7) });
   const months = Math.floor(days / 30);
-  return `${months} ${months === 1 ? 'maand' : 'maanden'} geleden`;
+  return months === 1 ? t('1 maand geleden') : t('{n} maanden geleden', { n: months });
 }
 
 // Late = a whole extra period went by after it was due again. A daily task
@@ -67,11 +68,15 @@ const SHORT_MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 's
 // "morgen" or "2 dagen over tijd". Tone tells the list which colour to use.
 export function formatDeadline(dueAt: number, now: number): { text: string; tone: 'late' | 'today' | 'soon' } {
   const days = calendarDaysBetween(now, dueAt);
-  if (days < 0) return { text: `${-days} ${days === -1 ? 'dag' : 'dagen'} over tijd`, tone: 'late' };
-  if (days === 0) return { text: 'moet vandaag', tone: 'today' };
-  if (days === 1) return { text: 'uiterlijk morgen', tone: 'soon' };
+  if (days < 0) return { text: days === -1 ? t('1 dag over tijd') : t('{n} dagen over tijd', { n: -days }), tone: 'late' };
+  if (days === 0) return { text: t('moet vandaag'), tone: 'today' };
+  if (days === 1) return { text: t('uiterlijk morgen'), tone: 'soon' };
   const d = new Date(dueAt);
-  return { text: `uiterlijk ${SHORT_WEEKDAYS[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`, tone: 'soon' };
+  // Short names are translated where shown (t('di') → "Tue")
+  return {
+    text: t('uiterlijk {date}', { date: `${t(SHORT_WEEKDAYS[d.getDay()])} ${d.getDate()} ${t(SHORT_MONTHS[d.getMonth()])}` }),
+    tone: 'soon',
+  };
 }
 
 // Sort helper: tasks with a deadline before those without, earliest first

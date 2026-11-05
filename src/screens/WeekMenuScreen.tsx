@@ -6,13 +6,14 @@ import { useHousehold } from '../context/HouseholdContext';
 import { useNow } from '../hooks/useNow';
 import { useRecipes } from '../hooks/useRecipes';
 import RecipesScreen, { RecipeEditor } from './RecipesScreen';
-import { DAY_KEYS, DAY_NAMES, addDays, shortDate, weekId, weekRangeLabel } from '../lib/week';
+import { DAY_KEYS, addDays, dayName, dayNameInSentence, shortDate, weekId, weekRangeLabel } from '../lib/week';
 import { startOfDay } from '../lib/time';
 import { addIngredientsToGroceries, addResultText, fromRecipe } from '../lib/groceries';
 import type { IngredientToAdd } from '../lib/groceries';
 import { DEFAULT_DISHES, resolveDay, searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
 import type { DayKey, Recipe, WeekMenu } from '../types';
+import { t } from '../i18n';
 
 export default function WeekMenuScreen() {
   const { user } = useAuth();
@@ -65,7 +66,7 @@ export default function WeekMenuScreen() {
         { merge: true }
       );
     } catch (err) {
-      flash(dutchError(err, 'Opslaan lukte niet.'));
+      flash(dutchError(err, t('Opslaan lukte niet.')));
     }
   }
 
@@ -75,7 +76,7 @@ export default function WeekMenuScreen() {
     try {
       flash(addResultText(await addIngredientsToGroceries(householdId, user.uid, ingredients)));
     } catch (err) {
-      flash(dutchError(err, 'Toevoegen lukte niet.'));
+      flash(dutchError(err, t('Toevoegen lukte niet.')));
     } finally {
       setBusy(null);
     }
@@ -91,20 +92,20 @@ export default function WeekMenuScreen() {
     <>
       <div className="app-header">
         <div>
-          <h2 className="household-name">Weekmenu</h2>
+          <h2 className="household-name">{t('Weekmenu')}</h2>
           <div className="week-nav">
-            <button className="week-arrow" onClick={() => setPage((w) => w - 1)} aria-label="Vorige 7 dagen">
+            <button className="week-arrow" onClick={() => setPage((w) => w - 1)} aria-label={t('Vorige 7 dagen')}>
               ‹
             </button>
             <span className="week-label">
               {weekRangeLabel(start)}
             </span>
-            <button className="week-arrow" onClick={() => setPage((w) => w + 1)} aria-label="Volgende 7 dagen">
+            <button className="week-arrow" onClick={() => setPage((w) => w + 1)} aria-label={t('Volgende 7 dagen')}>
               ›
             </button>
             {page !== 0 && (
               <button className="link-button" onClick={() => setPage(0)} style={{ fontSize: 12 }}>
-                Vandaag
+                {t('Vandaag')}
               </button>
             )}
           </div>
@@ -117,10 +118,10 @@ export default function WeekMenuScreen() {
           onClick={() => sendToGroceries('week', weekIngredients)}
           disabled={busy !== null || weekIngredients.length === 0}
         >
-          {busy === 'week' ? 'Even geduld…' : '🛒 Hele week naar boodschappen'}
+          {busy === 'week' ? t('Even geduld…') : t('🛒 Hele week naar boodschappen')}
         </button>
         <button className="btn btn-ghost" onClick={() => setShowRecipes(true)}>
-          📖 Gerechten
+          {t('📖 Gerechten')}
         </button>
       </div>
 
@@ -132,19 +133,21 @@ export default function WeekMenuScreen() {
             return (
               <div key={key} className={`day-card day-${key}${isToday ? ' today' : ''}`}>
                 <div className="day-head">
-                  <span className="day-name">{DAY_NAMES[key]}</span>
+                  <span className="day-name">{dayName(key)}</span>
                   <span className="day-date">{shortDate(date)}</span>
-                  {isToday && <span className="day-today">Vandaag</span>}
+                  {isToday && <span className="day-today">{t('Vandaag')}</span>}
                 </div>
                 <button className="day-body" onClick={() => setPicking(i)}>
                   {plan.kind === 'recipe' && (
                     <>
                       <span className="day-dish">
                         {plan.recipe.name}
-                        {plan.isDefault && <span className="day-default"> · vaste {DAY_NAMES[key].toLowerCase()}</span>}
+                        {plan.isDefault && (
+                          <span className="day-default"> · {t('vaste {day}', { day: dayNameInSentence(key) })}</span>
+                        )}
                       </span>
                       <span className="day-ingredients">
-                        {plan.recipe.ingredients.join(', ') || 'Geen ingrediënten ingevuld'}
+                        {plan.recipe.ingredients.join(', ') || t('Geen ingrediënten ingevuld')}
                       </span>
                     </>
                   )}
@@ -152,12 +155,12 @@ export default function WeekMenuScreen() {
                     <>
                       <span className="day-dish">{plan.name} 🍟</span>
                       <span className="day-ingredients">
-                        Tip: maak een gerecht "{plan.name}" aan voor de ingrediënten
+                        {t('Tip: maak een gerecht "{name}" aan voor de ingrediënten', { name: plan.name })}
                       </span>
                     </>
                   )}
-                  {plan.kind === 'deleted' && <span className="day-empty">Gerecht is verwijderd — kies opnieuw</span>}
-                  {plan.kind === 'none' && <span className="day-empty">+ Kies een gerecht</span>}
+                  {plan.kind === 'deleted' && <span className="day-empty">{t('Gerecht is verwijderd — kies opnieuw')}</span>}
+                  {plan.kind === 'none' && <span className="day-empty">{t('+ Kies een gerecht')}</span>}
                 </button>
                 {plan.kind === 'recipe' && (
                   <div className="day-buttons">
@@ -171,13 +174,13 @@ export default function WeekMenuScreen() {
                       ) : (
                         // Shorter label in the narrower tablet cards, so it fits on one line
                         <>
-                          <span className="label-long">🛒 Naar boodschappen</span>
-                          <span className="label-short">🛒 Boodschappen</span>
+                          <span className="label-long">{t('🛒 Naar boodschappen')}</span>
+                          <span className="label-short">{t('🛒 Boodschappen')}</span>
                         </>
                       )}
                     </button>
                     <button className="btn btn-ghost day-btn" onClick={() => setDay(week, key, null)}>
-                      Wissen
+                      {t('Wissen')}
                     </button>
                   </div>
                 )}
@@ -241,12 +244,12 @@ function RecipePicker({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Wat eten we {DAY_NAMES[day].toLowerCase()}?</h3>
+        <h3 className="modal-title">{t('Wat eten we {day}?', { day: dayNameInSentence(day) })}</h3>
         {recipes.length > 0 && (
           <input
             className="input"
             type="search"
-            placeholder="🔍 Zoek op gerecht of ingrediënt…"
+            placeholder={t('🔍 Zoek op gerecht of ingrediënt…')}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             // Only jump into the search box when the list is long (saves a
@@ -266,22 +269,22 @@ function RecipePicker({
               <span className="picker-sub">{r.ingredients.join(', ')}</span>
             </button>
           ))}
-          {recipes.length === 0 && <p className="settings-note">Nog geen gerechten in de bibliotheek.</p>}
+          {recipes.length === 0 && <p className="settings-note">{t('Nog geen gerechten in de bibliotheek.')}</p>}
           {recipes.length > 0 && shown.length === 0 && (
-            <p className="settings-note">Geen gerecht gevonden met "{filter.trim()}".</p>
+            <p className="settings-note">{t('Geen gerecht gevonden met "{query}".', { query: filter.trim() })}</p>
           )}
         </div>
         <button className="btn btn-secondary btn-block" onClick={() => setCreating(true)} style={{ margin: '12px 0 8px' }}>
-          {shown.length === 0 && filter.trim() ? `+ Nieuw gerecht "${filter.trim()}"` : '+ Nieuw gerecht'}
+          {shown.length === 0 && filter.trim() ? t('+ Nieuw gerecht "{name}"', { name: filter.trim() }) : t('+ Nieuw gerecht')}
         </button>
         {DEFAULT_DISHES[day] && (
           // Clearing the stored value brings back the default (e.g. Patat)
           <button className="btn btn-ghost btn-block" onClick={() => onPick('default')}>
-            Terug naar {DEFAULT_DISHES[day]}
+            {t('Terug naar {name}', { name: DEFAULT_DISHES[day] ?? '' })}
           </button>
         )}
         <button className="btn btn-ghost btn-block" onClick={() => onPick(null)}>
-          Niets plannen
+          {t('Niets plannen')}
         </button>
       </div>
     </div>

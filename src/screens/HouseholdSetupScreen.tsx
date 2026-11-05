@@ -10,6 +10,7 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import type { Household } from '../types';
 import { dutchError } from '../lib/firebaseErrors';
+import { t } from '../i18n';
 
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -29,7 +30,7 @@ export default function HouseholdSetupScreen() {
 
   async function handleCreate() {
     if (!user || !householdName.trim()) {
-      setError('Geef je huishouden eerst een naam.');
+      setError(t('Geef je huishouden eerst een naam.'));
       return;
     }
     setError(null);
@@ -60,7 +61,7 @@ export default function HouseholdSetupScreen() {
         { merge: true }
       );
     } catch (err) {
-      setError(dutchError(err, 'Kon het huishouden niet aanmaken.'));
+      setError(dutchError(err, t('Kon het huishouden niet aanmaken.')));
     } finally {
       setBusy(false);
     }
@@ -68,7 +69,7 @@ export default function HouseholdSetupScreen() {
 
   async function handleJoin() {
     if (!user || !joinCode.trim()) {
-      setError('Vul de uitnodigingscode van je partner in.');
+      setError(t('Vul de uitnodigingscode van je partner in.'));
       return;
     }
     setError(null);
@@ -82,13 +83,13 @@ export default function HouseholdSetupScreen() {
       // open to any authenticated user.
       const codeSnap = await getDoc(doc(db, 'inviteCodes', code));
       if (!codeSnap.exists()) {
-        setError('Deze code hoort bij geen enkel huishouden. Controleer hem nog even.');
+        setError(t('Deze code hoort bij geen enkel huishouden. Controleer hem nog even.'));
         return;
       }
       const data = codeSnap.data();
       const householdId = typeof data?.householdId === 'string' ? data.householdId : undefined;
       if (!householdId) {
-        setError('Er klopt iets niet met deze code. Vraag je partner het huishouden opnieuw aan te maken.');
+        setError(t('Er klopt iets niet met deze code. Vraag je partner het huishouden opnieuw aan te maken.'));
         return;
       }
       const householdRef = doc(db, 'households', householdId);
@@ -103,12 +104,12 @@ export default function HouseholdSetupScreen() {
       await runTransaction(db, async (tx) => {
         const freshSnap = await tx.get(householdRef);
         if (!freshSnap.exists()) {
-          throw new Error('Dit huishouden bestaat niet meer.');
+          throw new Error(t('Dit huishouden bestaat niet meer.'));
         }
         const data = freshSnap.data() as Household;
         if (!data.memberIds.includes(user.uid)) {
           if (data.memberIds.length >= 2) {
-            throw new Error('Dit huishouden heeft al twee leden.');
+            throw new Error(t('Dit huishouden heeft al twee leden.'));
           }
           tx.update(householdRef, { memberIds: [...data.memberIds, user.uid] });
         }
@@ -120,8 +121,8 @@ export default function HouseholdSetupScreen() {
       const code = typeof err === 'object' && err && 'code' in err ? err.code : null;
       setError(
         code === 'permission-denied'
-          ? 'Dit huishouden heeft al twee leden. Check in Firebase wie er in memberIds staat.'
-          : dutchError(err, 'Kon niet bij het huishouden aansluiten.')
+          ? t('Dit huishouden heeft al twee leden. Check in Firebase wie er in memberIds staat.')
+          : dutchError(err, t('Kon niet bij het huishouden aansluiten.'))
       );
     } finally {
       setBusy(false);
@@ -134,31 +135,31 @@ export default function HouseholdSetupScreen() {
         <h1 className="brand-title" style={{ fontSize: 26 }}>
           Hoi {profile?.displayName ?? 'daar'} 👋
         </h1>
-        <p className="brand-subtitle">Maak een huishouden aan of sluit je aan</p>
+        <p className="brand-subtitle">{t('Maak een huishouden aan of sluit je aan')}</p>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <p className="card-title">Nieuw huishouden aanmaken</p>
+          <p className="card-title">{t('Nieuw huishouden aanmaken')}</p>
           <div style={{ marginBottom: 12 }}>
             <input
               className="input"
-              placeholder="Naam (bijv. Ons huis)"
+              placeholder={t('Naam (bijv. Ons huis)')}
               value={householdName}
               onChange={(e) => setHouseholdName(e.target.value)}
             />
           </div>
           <button className="btn btn-primary btn-block" onClick={handleCreate} disabled={busy}>
-            {busy ? 'Even geduld…' : 'Huishouden aanmaken'}
+            {busy ? t('Even geduld…') : t('Huishouden aanmaken')}
           </button>
         </div>
 
-        <p className="divider-text">— of —</p>
+        <p className="divider-text">{t('— of —')}</p>
 
         <div className="card">
-          <p className="card-title">Aansluiten met een uitnodigingscode</p>
+          <p className="card-title">{t('Aansluiten met een uitnodigingscode')}</p>
           <div style={{ marginBottom: 12 }}>
             <input
               className="input"
-              placeholder="Code van 6 tekens"
+              placeholder={t('Code van 6 tekens')}
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               maxLength={6}
@@ -170,7 +171,7 @@ export default function HouseholdSetupScreen() {
             onClick={handleJoin}
             disabled={busy}
           >
-            {busy ? 'Even geduld…' : 'Aansluiten'}
+            {busy ? t('Even geduld…') : t('Aansluiten')}
           </button>
         </div>
 

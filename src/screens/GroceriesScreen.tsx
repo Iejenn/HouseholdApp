@@ -23,6 +23,7 @@ import { dutchError } from '../lib/firebaseErrors';
 import RecipesScreen from './RecipesScreen';
 import SectionCard from '../components/SectionCard';
 import type { GroceryItem } from '../types';
+import { t } from '../i18n';
 
 export default function GroceriesScreen() {
   const { user } = useAuth();
@@ -87,7 +88,7 @@ export default function GroceriesScreen() {
       await addDoc(collection(db, 'households', householdId, 'groceries'), item);
     } catch (err) {
       setText(trimmed);
-      setError(dutchError(err, 'Kon het niet toevoegen.'));
+      setError(dutchError(err, t('Kon het niet toevoegen.')));
     }
   }
 
@@ -143,28 +144,30 @@ export default function GroceriesScreen() {
     <>
       <div className="app-header">
         <div>
-          <h2 className="household-name">Boodschappen</h2>
+          <h2 className="household-name">{t('Boodschappen')}</h2>
           <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 2 }}>
             {open.length === 0
-              ? 'Niets nodig op dit moment'
-              : `${open.length} ${open.length === 1 ? 'ding' : 'dingen'} te halen`}
+              ? t('Niets nodig op dit moment')
+              : open.length === 1
+                ? t('1 ding te halen')
+                : t('{n} dingen te halen', { n: open.length })}
           </p>
         </div>
         <button className="btn btn-ghost header-btn" onClick={() => setShowRecipes(true)}>
-          📖 Gerechten
+          {t('📖 Gerechten')}
         </button>
       </div>
 
       <form className="grocery-add" onSubmit={handleAdd}>
         <input
           className="input"
-          placeholder="Wat moet er gehaald worden?"
+          placeholder={t('Wat moet er gehaald worden?')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           enterKeyHint="done"
         />
         <button className="btn btn-primary" type="submit" disabled={!text.trim()}>
-          Toevoegen
+          {t('Toevoegen')}
         </button>
       </form>
       {suggestions.length > 0 && (
@@ -185,19 +188,19 @@ export default function GroceriesScreen() {
           <p className="empty-state">
             🛒
             <br />
-            Het lijstje is leeg.
+            {t('Het lijstje is leeg.')}
           </p>
         )}
 
         <div className="card-grid">
           {/* Same card look as the week menu */}
           {open.length > 0 && (
-            <SectionCard color="#f8dfd2" title="🛒 Te halen" aside={<span className="section-count">{open.length}</span>}>
+            <SectionCard color="#f8dfd2" title={t('🛒 Te halen')} aside={<span className="section-count">{open.length}</span>}>
               {open.map((item) => (
                 <GroceryRow
                   key={item.id}
                   item={item}
-                  meta={`door ${memberNames[item.addedBy] ?? '…'}`}
+                  meta={t('door {name}', { name: memberNames[item.addedBy] ?? '…' })}
                   onToggle={() => toggleChecked(item)}
                   onRemove={() => swipe.remove(item)}
                 />
@@ -208,14 +211,14 @@ export default function GroceriesScreen() {
           {checked.length > 0 && (
             <SectionCard
               color="#e9e6e0"
-              title="🧺 In het mandje"
+              title={t('🧺 In het mandje')}
               aside={<span className="section-count">{checked.length}</span>}
             >
               {checked.map((item) => (
                 <GroceryRow
                   key={item.id}
                   item={item}
-                  meta={`gehaald door ${memberNames[item.checkedBy ?? ''] ?? '…'}`}
+                  meta={t('gehaald door {name}', { name: memberNames[item.checkedBy ?? ''] ?? '…' })}
                   onToggle={() => toggleChecked(item)}
                   onRemove={() => swipe.remove(item)}
                 />
@@ -225,7 +228,7 @@ export default function GroceriesScreen() {
         </div>
         
         {items.length > 0 && (
-          <p className="swipe-hint">Swipe naar rechts om iets van de lijst te halen</p>
+          <p className="swipe-hint">{t('Swipe naar rechts om iets van de lijst te halen')}</p>
         )}
       </div>
 
@@ -253,7 +256,7 @@ function GroceryRow({
         <button
           className={`task-checkbox${isDone ? ' done' : ''}`}
           onClick={onToggle}
-          aria-label={isDone ? 'Terug op de lijst' : 'Gehaald'}
+          aria-label={isDone ? t('Terug op de lijst') : t('Gehaald')}
         >
           {isDone ? '✓' : ''}
         </button>
@@ -262,7 +265,7 @@ function GroceryRow({
           <p className="task-meta">
             {/* Which dish(es) it's for, when added from a recipe ("Pasta voor
                 Pasta" says nothing, so a dish named like the item is left out) */}
-            {forDishes.length > 0 && <span className="grocery-for">🍽️ voor {forDishes.join(', ')} · </span>}
+            {forDishes.length > 0 && <span className="grocery-for">🍽️ {t('voor {dishes}', { dishes: forDishes.join(', ') })} · </span>}
             {meta}
           </p>
         </div>

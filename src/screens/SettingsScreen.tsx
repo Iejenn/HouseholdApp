@@ -10,6 +10,9 @@ import type { PushStatus } from '../lib/push';
 import { dutchError } from '../lib/firebaseErrors';
 import { activeVacation, setVacation } from '../lib/vacation';
 import type { NotifyPrefs } from '../types';
+import { LANGUAGES, locale, t, useLanguage } from '../i18n';
+import WhatsNew from '../components/WhatsNew';
+import { CHANGELOG } from '../data/changelog';
 
 const PREFS: { key: keyof NotifyPrefs; label: string; description: string }[] = [
   { key: 'chat', label: 'Briefjes op het prikbord', description: 'Als je partner een post-it plakt' },
@@ -22,6 +25,8 @@ const PREFS: { key: keyof NotifyPrefs; label: string; description: string }[] = 
 export default function SettingsScreen() {
   const { user, profile, signOut } = useAuth();
   const { householdId, household, memberNames } = useHousehold();
+  const { lang, setLang } = useLanguage();
+  const [showChanges, setShowChanges] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const vacation = activeVacation(household);
   const [vacationError, setVacationError] = useState<string | null>(null);
@@ -32,22 +37,22 @@ export default function SettingsScreen() {
     try {
       await setVacation(householdId, user.uid, on);
     } catch (err) {
-      setVacationError(dutchError(err, 'Vakantiemodus wijzigen lukte niet.'));
+      setVacationError(dutchError(err, t('Vakantiemodus wijzigen lukte niet.')));
     }
   }
 
   // Takes someone off the member list. Their phone notices and goes back to
   // the create/join screen; the household and all its data stay with you.
   async function removeMember(memberUid: string) {
-    const name = memberNames[memberUid] ?? 'deze persoon';
-    if (!window.confirm(`${name} uit het huishouden verwijderen? Met de uitnodigingscode kan diegene later opnieuw aansluiten.`)) {
+    const name = memberNames[memberUid] ?? t('deze persoon');
+    if (!window.confirm(t('{name} uit het huishouden verwijderen? Met de uitnodigingscode kan diegene later opnieuw aansluiten.', { name }))) {
       return;
     }
     setRemoveError(null);
     try {
       await updateDoc(doc(db, 'households', householdId), { memberIds: arrayRemove(memberUid) });
     } catch (err) {
-      setRemoveError(dutchError(err, 'Verwijderen lukte niet.'));
+      setRemoveError(dutchError(err, t('Verwijderen lukte niet.')));
     }
   }
   const [status, setStatus] = useState<PushStatus | null>(null);
@@ -65,7 +70,7 @@ export default function SettingsScreen() {
     try {
       setStatus(await enablePush(user.uid));
     } catch (err) {
-      setMessage({ text: dutchError(err, 'Meldingen aanzetten lukte niet.'), error: true });
+      setMessage({ text: dutchError(err, t('Meldingen aanzetten lukte niet.')), error: true });
     } finally {
       setBusy(false);
     }
@@ -84,9 +89,9 @@ export default function SettingsScreen() {
     setMessage(null);
     try {
       await sendTestPush();
-      setMessage({ text: 'Testmelding verstuurd — hij komt zo binnen.' });
+      setMessage({ text: t('Testmelding verstuurd — hij komt zo binnen.') });
     } catch (err) {
-      setMessage({ text: dutchError(err, 'Versturen lukte niet. Staan de Cloud Functions al online?'), error: true });
+      setMessage({ text: dutchError(err, t('Versturen lukte niet. Staan de Cloud Functions al online?')), error: true });
     } finally {
       setBusy(false);
     }
@@ -102,49 +107,65 @@ export default function SettingsScreen() {
     <>
       <div className="app-header">
         <div>
-          <h2 className="household-name">Instellingen</h2>
+          <h2 className="household-name">{t('Instellingen')}</h2>
           <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 2 }}>
-            Ingelogd als {profile?.displayName}
+            {t('Ingelogd als {name}', { name: profile?.displayName ?? '' })}
           </p>
         </div>
       </div>
 
       <div className="app-content narrow-content">
+        {/* Language: in both languages, so you can always find it */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <p className="card-title">🔔 Push-meldingen op deze telefoon</p>
+          <p className="card-title">🌐 Taal · Language</p>
+          <div className="segmented" role="radiogroup" aria-label="Taal · Language" style={{ marginBottom: 0 }}>
+            {LANGUAGES.map((l) => (
+              <button
+                key={l.id}
+                role="radio"
+                aria-checked={lang === l.id}
+                className={`segmented-item${lang === l.id ? ' active' : ''}`}
+                onClick={() => setLang(l.id).catch(() => {})}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-          {status === null && <p className="settings-note">Even kijken…</p>}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <p className="card-title">{t('🔔 Push-meldingen op deze telefoon')}</p>
+
+          {status === null && <p className="settings-note">{t('Even kijken…')}</p>}
           {status === 'not-configured' && (
-            <p className="settings-note">Meldingen zijn nog niet ingesteld in de app (de Web Push-sleutel ontbreekt).</p>
+            <p className="settings-note">{t('Meldingen zijn nog niet ingesteld in de app (de Web Push-sleutel ontbreekt).')}</p>
           )}
           {status === 'unsupported' && (
             <p className="settings-note">
-              Deze browser ondersteunt geen push-meldingen. Gebruik Chrome op Android en installeer de app op je
-              startscherm.
+              {t('Deze browser ondersteunt geen push-meldingen. Gebruik Chrome op Android en installeer de app op je startscherm.')}
             </p>
           )}
           {status === 'denied' && (
             <p className="settings-note">
-              Meldingen zijn geblokkeerd. Zet ze weer aan via Chrome: ⋮ → Instellingen → Site-instellingen →
-              Meldingen, of houd het app-icoon ingedrukt → App-info → Meldingen.
+              {t('Meldingen zijn geblokkeerd. Zet ze weer aan via Chrome: ⋮ → Instellingen → Site-instellingen → Meldingen, of houd het app-icoon ingedrukt → App-info → Meldingen.')}
             </p>
           )}
           {status === 'off' && (
             <button className="btn btn-primary btn-block" onClick={turnOn} disabled={busy}>
-              {busy ? 'Even geduld…' : 'Meldingen aanzetten'}
+              {busy ? t('Even geduld…') : t('Meldingen aanzetten')}
             </button>
           )}
           {status === 'on' && (
             <>
               <p className="settings-note" style={{ color: 'var(--color-sage)', fontWeight: 700 }}>
-                ✓ Staan aan op deze telefoon
+                {t('✓ Staan aan op deze telefoon')}
               </p>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-secondary" style={{ flex: 1 }} onClick={test} disabled={busy}>
-                  Stuur testmelding
+                  {t('Stuur testmelding')}
                 </button>
                 <button className="btn btn-ghost" onClick={turnOff} disabled={busy}>
-                  Uitzetten
+                  {t('Uitzetten')}
                 </button>
               </div>
             </>
@@ -160,12 +181,12 @@ export default function SettingsScreen() {
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <p className="card-title">📅 Google Agenda</p>
+          <p className="card-title">{t('📅 Google Agenda')}</p>
           <CalendarSettings />
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <p className="card-title">🌤️ Weer op het startscherm</p>
+          <p className="card-title">{t('🌤️ Weer op het startscherm')}</p>
           <WeatherLocationPicker />
         </div>
 
@@ -174,11 +195,14 @@ export default function SettingsScreen() {
         <div className="card" style={{ marginBottom: 16 }}>
           <label className="toggle-row" style={{ borderTop: 'none', paddingTop: 0 }}>
             <span>
-              <span className="toggle-label">🏖️ Vakantiemodus</span>
+              <span className="toggle-label">{t('🏖️ Vakantiemodus')}</span>
               <span className="toggle-description">
                 {vacation
-                  ? `Staat aan sinds ${new Date(vacation.from).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })} (${memberNames[vacation.by] ?? '…'})`
-                  : 'Voor jullie allebei: geen ochtendherinnering en geen weekoverzicht, en de kat krijgt geen honger. Taken lopen gewoon door, zodat je bij thuiskomst ziet wat er ligt.'}
+                  ? t('Staat aan sinds {date} ({name})', {
+                      date: new Date(vacation.from).toLocaleDateString(locale(), { day: 'numeric', month: 'long' }),
+                      name: memberNames[vacation.by] ?? '…',
+                    })
+                  : t('Voor jullie allebei: geen ochtendherinnering en geen weekoverzicht, en de kat krijgt geen honger. Taken lopen gewoon door, zodat je bij thuiskomst ziet wat er ligt.')}
               </span>
             </span>
             <input
@@ -196,14 +220,14 @@ export default function SettingsScreen() {
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <p className="card-title">Waarover wil je een melding?</p>
+          <p className="card-title">{t('Waarover wil je een melding?')}</p>
           {PREFS.map((p) => {
             const on = profile?.notify?.[p.key] !== false;
             return (
               <label className="toggle-row" key={p.key}>
                 <span>
-                  <span className="toggle-label">{p.label}</span>
-                  <span className="toggle-description">{p.description}</span>
+                  <span className="toggle-label">{t(p.label)}</span>
+                  <span className="toggle-description">{t(p.description)}</span>
                 </span>
                 <input
                   type="checkbox"
@@ -220,24 +244,24 @@ export default function SettingsScreen() {
           <div className="card" style={{ marginBottom: 16 }}>
             <p className="card-title">🏠 {household.name}</p>
             <p className="settings-note">
-              Uitnodigingscode: <span className="invite-code" style={{ marginTop: 0 }}>{household.inviteCode}</span>
+              {t('Uitnodigingscode:')} <span className="invite-code" style={{ marginTop: 0 }}>{household.inviteCode}</span>
             </p>
             {household.memberIds.map((memberUid) => (
               <div className="toggle-row" key={memberUid}>
                 <span className="toggle-label">
                   {memberNames[memberUid] ?? '…'}
-                  {memberUid === user?.uid ? ' (jij)' : ''}
+                  {memberUid === user?.uid ? ` ${t('(jij)')}` : ''}
                 </span>
                 {memberUid !== user?.uid && (
                   <button className="btn btn-ghost member-remove" onClick={() => removeMember(memberUid)}>
-                    Verwijderen
+                    {t('Verwijderen')}
                   </button>
                 )}
               </div>
             ))}
             {household.memberIds.length < 2 && (
               <p className="settings-note" style={{ marginTop: 10, marginBottom: 0 }}>
-                Nog plek voor één persoon: deel de code hierboven.
+                {t('Nog plek voor één persoon: deel de code hierboven.')}
               </p>
             )}
             {removeError && (
@@ -250,10 +274,19 @@ export default function SettingsScreen() {
 
         <button
           className="btn btn-ghost btn-block"
-          onClick={() => window.confirm('Wil je uitloggen?') && signOut()}
+          onClick={() => window.confirm(t('Wil je uitloggen?')) && signOut()}
         >
-          🚪 Uitloggen
+          {t('🚪 Uitloggen')}
         </button>
+
+        {/* Version = build date; the link shows the recent changes again */}
+        <p className="app-version">
+          {t('Versie {version}', { version: __APP_VERSION__ })} ·{' '}
+          <button className="link-button" onClick={() => setShowChanges(true)}>
+            {t('Wat is er nieuw?')}
+          </button>
+        </p>
+        {showChanges && <WhatsNew entries={CHANGELOG.slice(0, 5)} onClose={() => setShowChanges(false)} />}
       </div>
     </>
   );

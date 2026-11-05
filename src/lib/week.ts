@@ -1,4 +1,5 @@
 import type { DayKey } from '../types';
+import { currentLang, t } from '../i18n/core';
 
 export const DAY_KEYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 export const DAY_NAMES: Record<DayKey, string> = {
@@ -10,6 +11,16 @@ export const DAY_NAMES: Record<DayKey, string> = {
   sat: 'Zaterdag',
   sun: 'Zondag',
 };
+
+// Name of a weekday in the current language ("Maandag" / "Monday")
+export function dayName(key: DayKey): string {
+  return t(DAY_NAMES[key]);
+}
+
+// Same, for inside a sentence: "wat eten we maandag?" but "on Monday"
+export function dayNameInSentence(key: DayKey): string {
+  return currentLang() === 'nl' ? dayName(key).toLowerCase() : dayName(key);
+}
 
 const MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
@@ -42,10 +53,10 @@ export function weekId(date: Date): string {
 export function weekRangeLabel(monday: Date): string {
   const sunday = addDays(monday, 6);
   const start =
-    monday.getMonth() === sunday.getMonth() ? `${monday.getDate()}` : `${monday.getDate()} ${MONTHS[monday.getMonth()]}`;
-  return `${start} – ${sunday.getDate()} ${MONTHS[sunday.getMonth()]}`;
+    monday.getMonth() === sunday.getMonth() ? `${monday.getDate()}` : `${monday.getDate()} ${t(MONTHS[monday.getMonth()])}`;
+  return `${start} – ${sunday.getDate()} ${t(MONTHS[sunday.getMonth()])}`;
 }
 
 export function shortDate(date: Date): string {
-  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+  return `${date.getDate()} ${t(MONTHS[date.getMonth()])}`;
 }

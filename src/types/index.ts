@@ -7,6 +7,9 @@ export interface UserProfile {
   notify?: NotifyPrefs;
   // Google Calendar link — the visible part only (the token lives server-side)
   calendar?: CalendarLink;
+  // App language; also used for this person's push notifications.
+  // Missing on profiles from before languages existed (= Dutch).
+  language?: 'nl' | 'en';
 }
 export interface CalendarLink {
   email: string;

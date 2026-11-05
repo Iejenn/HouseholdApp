@@ -1,5 +1,6 @@
 import { Component, useEffect, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
+import { t } from '../i18n';
 
 function errorText(err: unknown): string {
   if (err instanceof Error) return `${err.name}: ${err.message}`;
@@ -29,13 +30,13 @@ function CrashMessage({ text }: { text: string }) {
   return (
     <div className="app-content" style={{ paddingTop: 24 }}>
       <div className="card crash-card">
-        <p className="card-title">😿 Er ging iets mis</p>
+        <p className="card-title">{t('😿 Er ging iets mis')}</p>
         <p className="settings-note">
-          Maak een screenshot van dit scherm en stuur het door. Je kunt intussen een ander tabblad gebruiken.
+          {t('Maak een screenshot van dit scherm en stuur het door. Je kunt intussen een ander tabblad gebruiken.')}
         </p>
         <pre className="crash-text">{text}</pre>
         <button className="btn btn-primary btn-block" onClick={() => window.location.replace(import.meta.env.BASE_URL)}>
-          Opnieuw laden
+          {t('Opnieuw laden')}
         </button>
       </div>
     </div>
@@ -63,9 +64,9 @@ export function GlobalErrorBar() {
     <div className="error-bar" role="alert">
       <span className="error-bar-text">⚠️ {text}</span>
       <button className="error-bar-btn" onClick={() => window.location.replace(import.meta.env.BASE_URL)}>
-        Herladen
+        {t('Herladen')}
       </button>
-      <button className="error-bar-btn" onClick={() => setText(null)} aria-label="Sluiten">
+      <button className="error-bar-btn" onClick={() => setText(null)} aria-label={t('Sluiten')}>
         ✕
       </button>
     </div>

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { PointerEvent, ReactNode } from 'react';
+import { t } from '../i18n';
 
 // Past this many pixels a drag counts as a swipe, not a tap
 const DRAG_START_PX = 8;
@@ -13,7 +14,7 @@ const ACT_AT_MAX_PX = 140;
 export default function SwipeToDelete({
   onDelete,
   onSwipeLeft,
-  leftLabel = '✏️ Bewerken',
+  leftLabel = t('✏️ Bewerken'),
   children,
 }: {
   onDelete: () => void;
@@ -82,7 +83,7 @@ export default function SwipeToDelete({
 
   return (
     <div className="swipe-wrap" ref={rowRef}>
-      {dx > 0 && <div className={`swipe-bg${armed ? ' armed' : ''}`}>🗑️ Verwijderen</div>}
+      {dx > 0 && <div className={`swipe-bg${armed ? ' armed' : ''}`}>{t('🗑️ Verwijderen')}</div>}
       {dx < 0 && <div className={`swipe-bg swipe-bg-left${armed ? ' armed' : ''}`}>{leftLabel}</div>}
       <div
         className="swipe-content"

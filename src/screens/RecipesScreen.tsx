@@ -11,6 +11,7 @@ import { addIngredientsToGroceries, addResultText, fromRecipe, parseIngredients 
 import { searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Recipe } from '../types';
+import { t } from '../i18n';
 
 // Recipe library (Gerechten). Opened from the Weekmenu and Boodschappen
 // screens as a page on top, so it doesn't need a tab of its own.
@@ -35,7 +36,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
     try {
       flash(addResultText(await addIngredientsToGroceries(householdId, user.uid, fromRecipe(recipe))));
     } catch (err) {
-      flash(dutchError(err, 'Toevoegen lukte niet.'));
+      flash(dutchError(err, t('Toevoegen lukte niet.')));
     } finally {
       setBusyId(null);
     }
@@ -53,13 +54,15 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
       <div className="app-header">
         <div>
           <button className="link-button back-button" onClick={onClose}>
-            ‹ Terug
+            {t('‹ Terug')}
           </button>
-          <h2 className="household-name">📖 Gerechten</h2>
+          <h2 className="household-name">{t('📖 Gerechten')}</h2>
           <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 2 }}>
             {recipes.length === 0
-              ? 'Jullie vaste gerechten, met ingrediënten'
-              : `${recipes.length} ${recipes.length === 1 ? 'gerecht' : 'gerechten'}`}
+              ? t('Jullie vaste gerechten, met ingrediënten')
+              : recipes.length === 1
+                ? t('1 gerecht')
+                : t('{n} gerechten', { n: recipes.length })}
           </p>
         </div>
       </div>
@@ -69,21 +72,21 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
           <input
             className="input recipe-search"
             type="search"
-            placeholder="🔍 Zoek op gerecht of ingrediënt…"
+            placeholder={t('🔍 Zoek op gerecht of ingrediënt…')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         )}
         {query.trim() && visible.length === 0 && (
           <p className="empty-state" style={{ padding: '24px 20px' }}>
-            Geen gerecht gevonden met "{query.trim()}".
+            {t('Geen gerecht gevonden met "{query}".', { query: query.trim() })}
           </p>
         )}
         {!query.trim() && visible.length === 0 && (
           <p className="empty-state">
             🍝
             <br />
-            Nog geen gerechten. Tik op + om jullie eerste toe te voegen.
+            {t('Nog geen gerechten. Tik op + om jullie eerste toe te voegen.')}
           </p>
         )}
 
@@ -93,7 +96,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
               <div className="task-info" onClick={() => setEditing(r)} style={{ cursor: 'pointer' }}>
                 <p className="task-title">{r.name}</p>
                 <p className="task-meta recipe-ingredients">
-                  {r.ingredients.length > 0 ? r.ingredients.join(', ') : 'Nog geen ingrediënten'}
+                  {r.ingredients.length > 0 ? r.ingredients.join(', ') : t('Nog geen ingrediënten')}
                 </p>
               </div>
               <button
@@ -101,7 +104,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
                 onClick={() => addAll(r)}
                 disabled={busyId !== null || r.ingredients.length === 0}
               >
-                {busyId === r.id ? '…' : '🛒 Alles'}
+                {busyId === r.id ? '…' : t('🛒 Alles')}
               </button>
             </div>
           </SwipeToDelete>
@@ -109,7 +112,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
 
         {visible.length > 0 && (
           <p className="swipe-hint">
-            🛒 Alles = alle ingrediënten naar de boodschappen. Tik om te bewerken, swipe naar rechts om te verwijderen.
+            {t('🛒 Alles = alle ingrediënten naar de boodschappen. Tik om te bewerken, swipe naar rechts om te verwijderen.')}
           </p>
         )}
       </div>
@@ -117,7 +120,7 @@ export default function RecipesScreen({ onClose }: { onClose: () => void }) {
       {swipe.pending && <UndoToast label={swipe.pending.name} onUndo={swipe.undo} />}
       {info && !swipe.pending && <div className="undo-toast info-toast">{info}</div>}
 
-      <button className="fab" onClick={() => setEditing('new')} aria-label="Gerecht toevoegen">
+      <button className="fab" onClick={() => setEditing('new')} aria-label={t('Gerecht toevoegen')}>
         +
       </button>
 
@@ -156,11 +159,11 @@ export function RecipeEditor({
   async function save() {
     if (!user) return;
     if (!name.trim()) {
-      setError('Geef het gerecht een naam.');
+      setError(t('Geef het gerecht een naam.'));
       return;
     }
     if (parsed.length > 50) {
-      setError('Maximaal 50 ingrediënten.');
+      setError(t('Maximaal 50 ingrediënten.'));
       return;
     }
     setBusy(true);
@@ -182,7 +185,7 @@ export function RecipeEditor({
       }
       onClose();
     } catch (err) {
-      setError(dutchError(err, 'Opslaan lukte niet.'));
+      setError(dutchError(err, t('Opslaan lukte niet.')));
       setBusy(false);
     }
   }
@@ -190,12 +193,12 @@ export function RecipeEditor({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">{recipe ? 'Gerecht bewerken' : 'Nieuw gerecht'}</h3>
+        <h3 className="modal-title">{recipe ? t('Gerecht bewerken') : t('Nieuw gerecht')}</h3>
 
         <div style={{ marginBottom: 14 }}>
           <input
             className="input"
-            placeholder="Naam, bijv. Pasta Pesto"
+            placeholder={t('Naam, bijv. Pasta Pesto')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={60}
@@ -203,10 +206,10 @@ export function RecipeEditor({
           />
         </div>
 
-        <span className="field-label">Ingrediënten</span>
+        <span className="field-label">{t('Ingrediënten')}</span>
         <textarea
           className="input recipe-textarea"
-          placeholder={'Eén per regel, of met komma’s:\nKipfilet, Pasta, Groene pesto'}
+          placeholder={t('Eén per regel, of met komma’s:\nKipfilet, Pasta, Groene pesto')}
           value={ingredientsText}
           onChange={(e) => setIngredientsText(e.target.value)}
           rows={7}
@@ -224,10 +227,10 @@ export function RecipeEditor({
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: '8px 0 12px' }}>{error}</p>}
 
         <button className="btn btn-primary btn-block" onClick={save} disabled={busy} style={{ margin: '12px 0 8px' }}>
-          {busy ? 'Even geduld…' : 'Opslaan'}
+          {busy ? t('Even geduld…') : t('Opslaan')}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onClose}>
-          Annuleren
+          {t('Annuleren')}
         </button>
       </div>
     </div>

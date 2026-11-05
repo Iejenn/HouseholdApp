@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { dutchError } from '../lib/firebaseErrors';
+import { t } from '../i18n';
 
 export default function LoginScreen() {
   const { user, profileError, profileMissing, repairProfile, signIn, signUp, signOut, resetPassword } =
@@ -10,7 +11,7 @@ export default function LoginScreen() {
 
   async function handleRepair() {
     if (!repairName.trim()) {
-      setError('Vul je naam in om je profiel te herstellen.');
+      setError(t('Vul je naam in om je profiel te herstellen.'));
       return;
     }
     setError(null);
@@ -18,7 +19,7 @@ export default function LoginScreen() {
     try {
       await repairProfile(repairName.trim());
     } catch (err) {
-      setError(dutchError(err, 'Herstellen lukte niet.'));
+      setError(dutchError(err, t('Herstellen lukte niet.')));
     } finally {
       setBusy(false);
     }
@@ -35,7 +36,7 @@ export default function LoginScreen() {
     setError(null);
     setInfo(null);
     if (!email.trim()) {
-      setError('Vul eerst je e-mailadres in en tik dan opnieuw op "Wachtwoord vergeten?".');
+      setError(t('Vul eerst je e-mailadres in en tik dan opnieuw op "Wachtwoord vergeten?".'));
       return;
     }
     setBusy(true);
@@ -43,9 +44,9 @@ export default function LoginScreen() {
       await resetPassword(email.trim());
       // Same message whether or not the account exists, so this can't be
       // used to check which emails are registered
-      setInfo('Als er een account bij dit e-mailadres hoort, is er een resetlink onderweg. Kijk ook in je spam.');
+      setInfo(t('Als er een account bij dit e-mailadres hoort, is er een resetlink onderweg. Kijk ook in je spam.'));
     } catch (err) {
-      setError(dutchError(err, 'Kon de resetmail niet versturen.'));
+      setError(dutchError(err, t('Kon de resetmail niet versturen.')));
     } finally {
       setBusy(false);
     }
@@ -56,7 +57,7 @@ export default function LoginScreen() {
     setError(null);
     setInfo(null);
     if (!email || !password || (mode === 'signUp' && !displayName)) {
-      setError('Vul alle velden in.');
+      setError(t('Vul alle velden in.'));
       return;
     }
     setBusy(true);
@@ -76,9 +77,9 @@ export default function LoginScreen() {
   return (
     <div className="centered-screen">
       <div className="auth-card">
-        <h1 className="brand-title">🏠 Huishouden</h1>
+        <h1 className="brand-title">{t('🏠 Huishouden')}</h1>
         <p className="brand-subtitle">
-          {mode === 'signIn' ? 'Welkom terug' : 'Maak je account aan'}
+          {mode === 'signIn' ? t('Welkom terug') : t('Maak je account aan')}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -86,7 +87,7 @@ export default function LoginScreen() {
             <div style={{ marginBottom: 12 }}>
               <input
                 className="input"
-                placeholder="Je naam"
+                placeholder={t('Je naam')}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 autoComplete="name"
@@ -97,7 +98,7 @@ export default function LoginScreen() {
             <input
               className="input"
               type="email"
-              placeholder="E-mailadres"
+              placeholder={t('E-mailadres')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
@@ -107,7 +108,7 @@ export default function LoginScreen() {
             <input
               className="input"
               type="password"
-              placeholder="Wachtwoord"
+              placeholder={t('Wachtwoord')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
@@ -122,16 +123,16 @@ export default function LoginScreen() {
           {user && profileError && (
             <div className="card crash-card" style={{ marginBottom: 12 }}>
               <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 8 }}>
-                Inloggen gelukt, maar: {profileError}
+                {t('Inloggen gelukt, maar: {error}', { error: profileError })}
               </p>
               {profileMissing && (
                 <>
                   <p style={{ fontSize: 13, marginBottom: 8 }}>
-                    Herstel je profiel: je komt terug in je huishouden, met alle taken en punten.
+                    {t('Herstel je profiel: je komt terug in je huishouden, met alle taken en punten.')}
                   </p>
                   <input
                     className="input"
-                    placeholder="Je naam"
+                    placeholder={t('Je naam')}
                     value={repairName}
                     onChange={(e) => setRepairName(e.target.value)}
                     style={{ marginBottom: 8 }}
@@ -143,12 +144,12 @@ export default function LoginScreen() {
                     disabled={busy}
                     style={{ marginBottom: 8 }}
                   >
-                    {busy ? 'Even geduld…' : 'Profiel herstellen'}
+                    {busy ? t('Even geduld…') : t('Profiel herstellen')}
                   </button>
                 </>
               )}
               <button type="button" className="link-button" onClick={signOut}>
-                Uitloggen en opnieuw proberen
+                {t('Uitloggen en opnieuw proberen')}
               </button>
             </div>
           )}
@@ -159,7 +160,7 @@ export default function LoginScreen() {
           )}
 
           <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-            {busy ? 'Even geduld…' : mode === 'signIn' ? 'Inloggen' : 'Account maken'}
+            {busy ? t('Even geduld…') : mode === 'signIn' ? t('Inloggen') : t('Account maken')}
           </button>
         </form>
 
@@ -172,7 +173,7 @@ export default function LoginScreen() {
               disabled={busy}
               style={{ display: 'block', margin: '0 auto 8px' }}
             >
-              Wachtwoord vergeten?
+              {t('Wachtwoord vergeten?')}
             </button>
           )}
           <button
@@ -184,8 +185,8 @@ export default function LoginScreen() {
             }}
           >
             {mode === 'signIn'
-              ? 'Nog geen account? Registreer je'
-              : 'Al een account? Log in'}
+              ? t('Nog geen account? Registreer je')
+              : t('Al een account? Log in')}
           </button>
         </div>
       </div>

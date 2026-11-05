@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { t } from '../i18n';
 
 // Chrome-only event, not in TypeScript's DOM types
 interface BeforeInstallPromptEvent extends Event {
@@ -89,24 +90,24 @@ export default function InstallPrompt() {
     <div className="install-banner">
       <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="install-icon" />
       <div className="install-text">
-        <p className="install-title">Installeer Huishouden</p>
+        <p className="install-title">{t('Installeer Huishouden')}</p>
         <p className="install-sub">
           {canPrompt
             ? isMobile
-              ? 'Zet de app op je startscherm, dan heb je hem altijd bij de hand.'
-              : 'Installeer de app op je computer: hij opent dan in een eigen venster.'
+              ? t('Zet de app op je startscherm, dan heb je hem altijd bij de hand.')
+              : t('Installeer de app op je computer: hij opent dan in een eigen venster.')
             : isIOS
               ? // Newer iOS hides it one step deeper, behind "Toon meer" (tester feedback)
-                'Tik op Deel ⬆️, dan op "Toon meer" en kies "Zet op beginscherm".'
-              : 'Tik in Chrome op ⋮ en kies "Toevoegen aan startscherm".'}
+                t('Tik op Deel ⬆️, dan op "Toon meer" en kies "Zet op beginscherm".')
+              : t('Tik in Chrome op ⋮ en kies "Toevoegen aan startscherm".')}
         </p>
       </div>
       {canPrompt && (
         <button className="btn btn-primary install-btn" onClick={install}>
-          Installeren
+          {t('Installeren')}
         </button>
       )}
-      <button className="install-close" onClick={dismiss} aria-label="Niet nu">
+      <button className="install-close" onClick={dismiss} aria-label={t('Niet nu')}>
         ✕
       </button>
     </div>

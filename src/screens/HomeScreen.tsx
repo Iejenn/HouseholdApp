@@ -36,6 +36,7 @@ import { releaseSplash } from '../lib/splash';
 import type { CalendarEvent, GroceryItem, Task, WeekMenu } from '../types';
 import { REACTIONS, REPLY_MAX, addReply, handwriting, sortedReplies, toggleReaction } from '../lib/notes';
 import type { Note } from '../lib/notes';
+import { t } from '../i18n';
 
 export type HomeTarget = 'tasks' | 'groceries' | 'menu' | 'cat';
 
@@ -48,20 +49,20 @@ const NOTE_COLORS = ['#fdf0a6', '#fbd3dc', '#cfe6f7', '#d6efd0', '#fde0c2'];
 
 
 function greeting(hour: number): string {
-  if (hour < 6) return 'Goedenacht';
-  if (hour < 12) return 'Goedemorgen';
-  if (hour < 18) return 'Goedemiddag';
-  return 'Goedenavond';
+  if (hour < 6) return t('Goedenacht');
+  if (hour < 12) return t('Goedemorgen');
+  if (hour < 18) return t('Goedemiddag');
+  return t('Goedenavond');
 }
 
 function shortAgo(ms: number, now: number): string {
   const mins = Math.floor((now - ms) / 60000);
-  if (mins < 1) return 'zojuist';
-  if (mins < 60) return `${mins} min`;
+  if (mins < 1) return t('zojuist');
+  if (mins < 60) return t('{n} min', { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} u`;
+  if (hours < 24) return t('{n} u', { n: hours });
   const days = Math.floor(hours / 24);
-  return days === 1 ? 'gisteren' : `${days} dagen`;
+  return days === 1 ? t('gisteren') : t('{n} dagen', { n: days });
 }
 
 // Small, stable tilt per note, so the board looks hand-stuck
@@ -137,7 +138,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
           return {
             id: d.id,
             senderId: data.senderId,
-            senderName: data.senderName ?? 'Iemand',
+            senderName: data.senderName ?? t('Iemand'),
             text: data.text ?? '',
             // Just-sent notes have no server time yet
             createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
@@ -200,7 +201,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
     .slice(0, 3);
   const openGroceries = groceries.filter((g) => !g.checkedAt).sort((a, b) => b.createdAt - a.createdAt);
   const cat = computeCat(purchases, now, household?.vacations);
-  const catName = household?.catName?.trim() || 'Poes';
+  const catName = household?.catName?.trim() || t('Poes');
   const todayWeather = forecast ? describeWeather(forecast.currentCode) : null;
   const openNote = notes.find((n) => n.id === openNoteId) ?? null;
 
@@ -213,7 +214,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
             {name ? `, ${name}` : ''}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 2 }}>
-            {WEEKDAYS[today.getDay()]} {today.getDate()} {MONTHS[today.getMonth()]}
+            {t(WEEKDAYS[today.getDay()])} {today.getDate()} {t(MONTHS[today.getMonth()])}
             {forecast && todayWeather && ` · ${todayWeather.emoji} ${forecast.currentTemp}° · ${forecast.days[0].max}° / ${forecast.days[0].min}°`}
           </p>
         </div>
@@ -224,14 +225,17 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
         {vacation && (
           <div className="vacation-bar">
             <span>
-              🏖️ Vakantiemodus staat aan
+              {t('🏖️ Vakantiemodus staat aan')}
               <span className="vacation-sub">
-                sinds {new Date(vacation.from).getDate()} {MONTHS[new Date(vacation.from).getMonth()]} ·{' '}
+                {t('sinds {date}', {
+                  date: `${new Date(vacation.from).getDate()} ${t(MONTHS[new Date(vacation.from).getMonth()])}`,
+                })}{' '}
+                ·{' '}
                 {memberNames[vacation.by] ?? '…'}
               </span>
             </span>
             <button className="btn btn-primary" onClick={() => user && setVacation(householdId, user.uid, false)}>
-              Ik ben thuis
+              {t('Ik ben thuis')}
             </button>
           </div>
         )}
@@ -246,7 +250,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
                   const date = new Date(`${d.date}T12:00:00`);
                   return (
                     <div key={d.date} className={`weather-day${i === 0 ? ' today' : ''}`}>
-                      <span className="weather-name">{i === 0 ? 'Vandaag' : SHORT_DAYS[date.getDay()]}</span>
+                      <span className="weather-name">{i === 0 ? t('Vandaag') : t(SHORT_DAYS[date.getDay()])}</span>
                       <span className="weather-emoji">{w.emoji}</span>
                       <span className="weather-temp">
                         <strong>{d.max}°</strong> {d.min}°
@@ -257,15 +261,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
                 })}
               </div>
             )}
-            {location && weatherError && <p className="settings-note">Het weer kon niet geladen worden.</p>}
+            {location && weatherError && <p className="settings-note">{t('Het weer kon niet geladen worden.')}</p>}
             {!location && (
-              <SectionCard color="#dbe8f5" title="🌤️ Weer" className="home-card">
+              <SectionCard color="#dbe8f5" title={t('🌤️ Weer')} className="home-card">
                 <div className="section-card-pad">
                   {pickingPlace ? (
                     <WeatherLocationPicker onDone={() => setPickingPlace(false)} />
                   ) : (
                     <button className="btn btn-secondary btn-block" onClick={() => setPickingPlace(true)}>
-                      Weer instellen
+                      {t('Weer instellen')}
                     </button>
                   )}
                 </div>
@@ -276,19 +280,19 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
 
             <div className="home-grid">
               <button className="home-tile" style={{ '--card-color': '#f8ecc4' } as CSSProperties} onClick={() => onNavigate('menu')}>
-                <span className="home-tile-head">🍽️ Vanavond</span>
+                <span className="home-tile-head">{t('🍽️ Vanavond')}</span>
                 <span className="home-tile-main">
                   {tonight.kind === 'recipe'
                     ? tonight.recipe.name
                     : tonight.kind === 'default-missing'
                       ? `${tonight.name} 🍟`
-                      : 'Nog niks gepland'}
+                      : t('Nog niks gepland')}
                 </span>
               </button>
               <button className="home-tile" style={{ '--card-color': '#f8dfd2' } as CSSProperties} onClick={() => onNavigate('groceries')}>
-                <span className="home-tile-head">🛒 Boodschappen</span>
+                <span className="home-tile-head">{t('🛒 Boodschappen')}</span>
                 <span className="home-tile-main">
-                  {openGroceries.length === 0 ? 'Niks nodig' : `${openGroceries.length} te halen`}
+                  {openGroceries.length === 0 ? t('Niks nodig') : t('{n} te halen', { n: openGroceries.length })}
                 </span>
                 {openGroceries.length > 0 && (
                   <span className="home-tile-sub">{openGroceries.slice(0, 4).map((g) => g.text).join(', ')}</span>
@@ -298,43 +302,44 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
 
             <SectionCard
               color="#d4ece4"
-              title="✅ Taken"
+              title={t('✅ Taken')}
               className="home-card"
               aside={
                 <button className="link-button home-more" onClick={() => onNavigate('tasks')}>
-                  {openTasks.length} open{lateCount ? ` · ${lateCount} te laat` : ''} ›
+                  {t('{n} open', { n: openTasks.length })}
+                  {lateCount ? ` · ${t('{n} te laat', { n: lateCount })}` : ''} ›
                 </button>
               }
             >
               {topTasks.length === 0 ? (
                 <p className="settings-note section-card-pad" style={{ marginBottom: 0 }}>
-                  Alles gedaan! 🎉
+                  {t('Alles gedaan! 🎉')}
                 </p>
               ) : (
-                topTasks.map((t) => {
-                  const late = isTaskLate(t, now);
-                  const group = findTaskGroup(t.category);
-                  const deadline = !t.isRecurring && t.dueAt != null ? formatDeadline(t.dueAt, now) : null;
+                topTasks.map((task) => {
+                  const late = isTaskLate(task, now);
+                  const group = findTaskGroup(task.category);
+                  const deadline = !task.isRecurring && task.dueAt != null ? formatDeadline(task.dueAt, now) : null;
                   return (
-                    <div key={t.id} className={`task-row${late ? ' late' : ''}`}>
+                    <div key={task.id} className={`task-row${late ? ' late' : ''}`}>
                       <button
                         className="task-checkbox"
                         onClick={() => {
                           if (!user) return;
-                          undoCheck.checked(t);
-                          toggleTaskDone(householdId, user.uid, t);
+                          undoCheck.checked(task);
+                          toggleTaskDone(householdId, user.uid, task);
                         }}
-                        aria-label="Markeer als gedaan"
+                        aria-label={t('Markeer als gedaan')}
                       />
                       <div className="task-info">
                         <p className="task-title">
                           {group && <span className="task-emoji">{group.emoji}</span>}
-                          {t.title}
+                          {task.title}
                         </p>
                         {deadline ? (
                           <p className={`task-meta deadline-${deadline.tone}`}>📅 {deadline.text}</p>
                         ) : (
-                          late && <p className="task-meta task-late-text">te laat</p>
+                          late && <p className="task-meta task-late-text">{t('te laat')}</p>
                         )}
                       </div>
                     </div>
@@ -349,12 +354,12 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
               <span className="task-info">
                 <span className="task-title" style={{ display: 'block' }}>
                   {cat.mood === 'hungry'
-                    ? `${catName} heeft honger!`
+                    ? t('{name} heeft honger!', { name: catName })
                     : cat.mood === 'happy'
-                      ? `${catName} is superblij`
+                      ? t('{name} is superblij', { name: catName })
                       : cat.mood === 'content'
-                        ? `${catName} is tevreden`
-                        : `${catName} verveelt zich`}
+                        ? t('{name} is tevreden', { name: catName })
+                        : t('{name} verveelt zich', { name: catName })}
                 </span>
                 <span className="stat-track" style={{ display: 'block', marginTop: 6 }}>
                   <span className={`stat-fill${cat.fullness < 25 ? ' warn' : ''}`} style={{ display: 'block', width: `${cat.fullness}%` }} />
@@ -367,12 +372,12 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
           <div className="home-board">
             {/* Post-it board: replaces the chat */}
             <div className="board-head">
-              <p className="section-label" style={{ margin: 0 }}>📌 Prikbord</p>
+              <p className="section-label" style={{ margin: 0 }}>{t('📌 Prikbord')}</p>
               <button className="btn btn-primary board-add" onClick={() => setWriting(true)}>
-                + Briefje
+                {t('+ Briefje')}
               </button>
             </div>
-            {notes.length === 0 && <p className="empty-state" style={{ padding: '20px' }}>Nog geen briefjes. Plak de eerste!</p>}
+            {notes.length === 0 && <p className="empty-state" style={{ padding: '20px' }}>{t('Nog geen briefjes. Plak de eerste!')}</p>}
             <div className="board">
               {notes.map((n) => (
                 <PostIt
@@ -389,7 +394,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
             </div>
             {notes.length >= 12 && !showAllNotes && (
               <button className="link-button" style={{ display: 'block', margin: '8px auto 0' }} onClick={() => setShowAllNotes(true)}>
-                Alle briefjes
+                {t('Alle briefjes')}
               </button>
             )}
           </div>
@@ -418,9 +423,9 @@ function AgendaCard({ events, now }: { events: CalendarEvent[]; now: number }) {
   const startOf = (e: CalendarEvent) => (e.allDay ? new Date(`${e.start}T00:00:00`) : new Date(e.start));
   const labelFor = (d: Date) => {
     const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000);
-    if (diff === 0) return 'Vandaag';
-    if (diff === 1) return 'Morgen';
-    return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
+    if (diff === 0) return t('Vandaag');
+    if (diff === 1) return t('Morgen');
+    return `${t(WEEKDAYS[d.getDay()])} ${d.getDate()} ${t(MONTHS[d.getMonth()]).slice(0, 3)}`;
   };
 
   // Group by day, keeping the order the server sorted them in
@@ -434,10 +439,10 @@ function AgendaCard({ events, now }: { events: CalendarEvent[]; now: number }) {
   }
 
   return (
-    <SectionCard color="#e6ddf3" title="📅 Agenda" className="home-card">
+    <SectionCard color="#e6ddf3" title={t('📅 Agenda')} className="home-card">
       {groups.length === 0 ? (
         <p className="settings-note section-card-pad" style={{ marginBottom: 0 }}>
-          Niets gepland de komende dagen.
+          {t('Niets gepland de komende dagen.')}
         </p>
       ) : (
         groups.map((g) => (
@@ -447,11 +452,11 @@ function AgendaCard({ events, now }: { events: CalendarEvent[]; now: number }) {
               <div className="event-row" key={`${e.start}-${i}`}>
                 <span className="event-time">
                   {e.allDay
-                    ? 'hele dag'
+                    ? t('hele dag')
                     : new Date(e.start).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                 </span>
                 <span className="calendar-dot" style={{ background: e.color }} />
-                <span className="event-title">{e.title}</span>
+                <span className="event-title">{e.title || t('(geen titel)')}</span>
               </div>
             ))}
           </div>
@@ -488,7 +493,7 @@ function PostIt({
     if (!mine) return;
     timer.current = window.setTimeout(() => {
       held.current = true;
-      if (window.confirm('Dit briefje van het prikbord halen?')) {
+      if (window.confirm(t('Dit briefje van het prikbord halen?'))) {
         deleteDoc(doc(db, 'households', householdId, 'messages', note.id)).catch((err) =>
           console.error('Failed to delete note', err)
         );
@@ -517,7 +522,7 @@ function PostIt({
       onMouseLeave={cancelHold}
       onContextMenu={(e) => mine && e.preventDefault()}
       onClick={() => !held.current && onOpen()}
-      aria-label={`Briefje van ${note.senderName}: reageren`}
+      aria-label={t('Briefje van {name}: reageren', { name: note.senderName })}
     >
       <span className="postit-pin" aria-hidden>📌</span>
       <span className="postit-text" style={handwriting(note.senderId, memberIds, 17)}>
@@ -526,7 +531,7 @@ function PostIt({
       {shownReplies.length > 0 && (
         <span className="postit-replies">
           {replies.length > shownReplies.length && (
-            <span className="postit-more">+{replies.length - shownReplies.length} eerder</span>
+            <span className="postit-more">{t('+{n} eerder', { n: replies.length - shownReplies.length })}</span>
           )}
           {shownReplies.map((r) => (
             <span key={`${r.uid}-${r.at}`} className="postit-reply" style={handwriting(r.uid, memberIds, 15)}>
@@ -572,7 +577,7 @@ function NoteDetail({
     try {
       await toggleReaction(householdId, note, user.uid, emoji);
     } catch (err) {
-      setError(dutchError(err, 'Reageren lukte niet.'));
+      setError(dutchError(err, t('Reageren lukte niet.')));
     }
   }
 
@@ -585,7 +590,7 @@ function NoteDetail({
       await addReply(householdId, note.id, user.uid, text);
       setText('');
     } catch (err) {
-      setError(dutchError(err, 'Versturen lukte niet.'));
+      setError(dutchError(err, t('Versturen lukte niet.')));
     } finally {
       setBusy(false);
     }
@@ -635,14 +640,14 @@ function NoteDetail({
         <form className="reply-form" onSubmit={send}>
           <input
             className="input"
-            placeholder="Schrijf een reactie…"
+            placeholder={t('Schrijf een reactie…')}
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={REPLY_MAX}
             enterKeyHint="send"
           />
           <button className="btn btn-primary" type="submit" disabled={busy || !text.trim()}>
-            {busy ? '…' : 'Stuur'}
+            {busy ? '…' : t('Stuur')}
           </button>
         </form>
         {text.length > REPLY_MAX - 15 && (
@@ -653,7 +658,7 @@ function NoteDetail({
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginTop: 8 }}>{error}</p>}
 
         <button className="btn btn-ghost btn-block" onClick={onClose} style={{ marginTop: 12 }}>
-          Sluiten
+          {t('Sluiten')}
         </button>
       </div>
     </div>
@@ -683,7 +688,7 @@ function NoteComposer({ onClose }: { onClose: () => void }) {
       });
       onClose();
     } catch (err) {
-      setError(dutchError(err, 'Plakken lukte niet.'));
+      setError(dutchError(err, t('Plakken lukte niet.')));
       setBusy(false);
     }
   }
@@ -691,12 +696,12 @@ function NoteComposer({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Nieuw briefje</h3>
+        <h3 className="modal-title">{t('Nieuw briefje')}</h3>
         <textarea
           className="input postit-input"
           // In your own handwriting, so you see how it will look on the board
           style={{ background: color, ...handwriting(user?.uid ?? '', household?.memberIds ?? [], 18) }}
-          placeholder="Schrijf iets liefs, of: vergeet de pakketjes niet!"
+          placeholder={t('Schrijf iets liefs, of: vergeet de pakketjes niet!')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={300}
@@ -710,16 +715,16 @@ function NoteComposer({ onClose }: { onClose: () => void }) {
               className={`color-dot${c === color ? ' active' : ''}`}
               style={{ background: c }}
               onClick={() => setColor(c)}
-              aria-label="Kleur kiezen"
+              aria-label={t('Kleur kiezen')}
             />
           ))}
         </div>
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
         <button className="btn btn-primary btn-block" onClick={stick} disabled={busy || !text.trim()} style={{ marginBottom: 8 }}>
-          {busy ? 'Even geduld…' : '📌 Opplakken'}
+          {busy ? t('Even geduld…') : t('📌 Opplakken')}
         </button>
         <button className="btn btn-ghost btn-block" onClick={onClose}>
-          Annuleren
+          {t('Annuleren')}
         </button>
       </div>
     </div>

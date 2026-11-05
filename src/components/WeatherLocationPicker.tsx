@@ -6,6 +6,7 @@ import { useHousehold } from '../context/HouseholdContext';
 import { currentPosition, searchPlaces } from '../lib/weather';
 import { dutchError } from '../lib/firebaseErrors';
 import type { WeatherLocation } from '../types';
+import { t } from '../i18n';
 
 // Set where the weather is for: the phone's location once, or a typed town.
 // Stored on the household, so it only needs doing on one phone.
@@ -29,7 +30,7 @@ export default function WeatherLocationPicker({ onDone }: { onDone?: () => void 
     try {
       await save(await currentPosition());
     } catch (err) {
-      setError(dutchError(err, 'Locatie lukte niet.'));
+      setError(dutchError(err, t('Locatie lukte niet.')));
     } finally {
       setBusy(false);
     }
@@ -43,9 +44,9 @@ export default function WeatherLocationPicker({ onDone }: { onDone?: () => void 
     try {
       const found = await searchPlaces(query.trim());
       setResults(found);
-      if (found.length === 0) setError('Geen plaats gevonden met die naam.');
+      if (found.length === 0) setError(t('Geen plaats gevonden met die naam.'));
     } catch (err) {
-      setError(dutchError(err, 'Zoeken lukte niet.'));
+      setError(dutchError(err, t('Zoeken lukte niet.')));
     } finally {
       setBusy(false);
     }
@@ -55,21 +56,21 @@ export default function WeatherLocationPicker({ onDone }: { onDone?: () => void 
     <div>
       {household?.location && (
         <p className="settings-note">
-          Nu: <strong>{household.location.name}</strong>
+          {t('Nu:')} <strong>{household.location.name}</strong>
         </p>
       )}
       <button className="btn btn-secondary btn-block" onClick={useMyLocation} disabled={busy} style={{ marginBottom: 10 }}>
-        📍 Gebruik mijn locatie
+        {t('📍 Gebruik mijn locatie')}
       </button>
       <form onSubmit={search} style={{ display: 'flex', gap: 8 }}>
         <input
           className="input"
-          placeholder="Of typ een plaats, bijv. Utrecht"
+          placeholder={t('Of typ een plaats, bijv. Utrecht')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <button className="btn btn-ghost header-btn" type="submit" disabled={busy || !query.trim()}>
-          Zoek
+          {t('Zoek')}
         </button>
       </form>
       {results && results.length > 0 && (
@@ -83,7 +84,7 @@ export default function WeatherLocationPicker({ onDone }: { onDone?: () => void 
       )}
       {error && <p className="settings-note" style={{ color: 'var(--color-danger)', marginTop: 8 }}>{error}</p>}
       <p className="settings-note" style={{ marginTop: 8, marginBottom: 0 }}>
-        De locatie wordt één keer gevraagd en afgerond op ongeveer 1 km. Hij wordt niet gevolgd.
+        {t('De locatie wordt één keer gevraagd en afgerond op ongeveer 1 km. Hij wordt niet gevolgd.')}
       </p>
     </div>
   );

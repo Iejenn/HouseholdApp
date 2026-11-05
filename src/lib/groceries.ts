@@ -2,6 +2,7 @@ import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/fir
 import type { DocumentReference } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import type { GroceryItem, Recipe } from '../types';
+import { t } from '../i18n/core';
 
 // Same key for "Ui", " ui " and "UI", so they count as the same thing
 export const groceryKey = (text: string) => text.trim().toLowerCase();
@@ -97,7 +98,8 @@ export async function addIngredientsToGroceries(
 }
 
 export function addResultText({ added, skipped }: { added: number; skipped: number }): string {
-  if (added === 0) return skipped > 0 ? 'Alles stond al op de lijst 👍' : 'Geen ingrediënten om toe te voegen';
-  const main = `${added} ${added === 1 ? 'ding' : 'dingen'} op de boodschappenlijst gezet`;
-  return skipped > 0 ? `${main}, ${skipped} stond${skipped === 1 ? '' : 'en'} er al op` : main;
+  if (added === 0) return skipped > 0 ? t('Alles stond al op de lijst 👍') : t('Geen ingrediënten om toe te voegen');
+  const main = added === 1 ? t('1 ding op de boodschappenlijst gezet') : t('{n} dingen op de boodschappenlijst gezet', { n: added });
+  if (skipped === 0) return main;
+  return skipped === 1 ? t('{main}, 1 stond er al op', { main }) : t('{main}, {n} stonden er al op', { main, n: skipped });
 }

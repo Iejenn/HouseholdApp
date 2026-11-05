@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 // action: what happened to the item, e.g. "verwijderd" (swipe) or "afgevinkt"
 export default function UndoToast({
   label,
@@ -11,10 +13,10 @@ export default function UndoToast({
   return (
     <div className="undo-toast" role="status">
       <span className="undo-text">
-        "{label}" {action}
+        "{label}" {t(action)}
       </span>
       <button className="undo-btn" onClick={onUndo}>
-        Ongedaan maken
+        {t('Ongedaan maken')}
       </button>
     </div>
   );

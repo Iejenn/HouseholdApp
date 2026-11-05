@@ -4,6 +4,7 @@ import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { forgetCachedEvents, startCalendarLink, unlinkCalendar } from '../lib/calendar';
 import { dutchError } from '../lib/firebaseErrors';
+import { t } from '../i18n';
 
 // "Agenda koppelen": read-only Google Calendar access. You pick which of your
 // calendars are shown on the home screen (none until you tick one).
@@ -19,19 +20,19 @@ export default function CalendarSettings() {
     try {
       await startCalendarLink(); // leaves the app for Google's sign-in
     } catch (err) {
-      setError(dutchError(err, 'Koppelen starten lukte niet.'));
+      setError(dutchError(err, t('Koppelen starten lukte niet.')));
       setBusy(false);
     }
   }
 
   async function disconnect() {
-    if (!window.confirm('Agenda ontkoppelen? De app kan je agenda dan niet meer lezen.')) return;
+    if (!window.confirm(t('Agenda ontkoppelen? De app kan je agenda dan niet meer lezen.'))) return;
     setBusy(true);
     setError(null);
     try {
       await unlinkCalendar();
     } catch (err) {
-      setError(dutchError(err, 'Ontkoppelen lukte niet.'));
+      setError(dutchError(err, t('Ontkoppelen lukte niet.')));
     } finally {
       setBusy(false);
     }
@@ -49,14 +50,14 @@ export default function CalendarSettings() {
     return (
       <>
         <p className="settings-note">
-          Zie jullie afspraken op het startscherm. De app krijgt alleen <strong>leesrechten</strong> en jij kiest
-          welke agenda's zichtbaar zijn.
+          {t('Zie jullie afspraken op het startscherm. De app krijgt alleen')} <strong>{t('leesrechten')}</strong>{' '}
+          {t("en jij kiest welke agenda's zichtbaar zijn.")}
         </p>
         <button className="btn btn-secondary btn-block" onClick={connect} disabled={busy}>
-          {busy ? 'Even geduld…' : '📅 Agenda koppelen'}
+          {busy ? t('Even geduld…') : t('📅 Agenda koppelen')}
         </button>
         <p className="settings-note" style={{ marginTop: 8, marginBottom: 0 }}>
-          Google laat eenmalig "app niet geverifieerd" zien: kies <em>Geavanceerd → Ga naar Huishouden</em>.
+          {t('Google laat eenmalig "app niet geverifieerd" zien: kies')} <em>{t('Geavanceerd → Ga naar Huishouden')}</em>.
         </p>
         {error && <p className="settings-note" style={{ color: 'var(--color-danger)', marginTop: 8 }}>{error}</p>}
       </>
@@ -66,12 +67,12 @@ export default function CalendarSettings() {
   return (
     <>
       <p className="settings-note">
-        Gekoppeld met <strong>{link.email || 'Google'}</strong>. Kies welke agenda's op het startscherm komen
-        (voor jullie allebei zichtbaar):
+        {t('Gekoppeld met')} <strong>{link.email || 'Google'}</strong>.{' '}
+        {t("Kies welke agenda's op het startscherm komen (voor jullie allebei zichtbaar):")}
       </p>
       {link.needsRelink && (
         <p className="settings-note" style={{ color: 'var(--color-danger)' }}>
-          De koppeling werkt niet meer (ingetrokken of verlopen). Ontkoppel en koppel opnieuw.
+          {t('De koppeling werkt niet meer (ingetrokken of verlopen). Ontkoppel en koppel opnieuw.')}
         </p>
       )}
       {link.available.map((c) => (
@@ -92,7 +93,7 @@ export default function CalendarSettings() {
         </label>
       ))}
       <button className="btn btn-ghost btn-block" onClick={disconnect} disabled={busy} style={{ marginTop: 8 }}>
-        Ontkoppelen
+        {t('Ontkoppelen')}
       </button>
       {error && <p className="settings-note" style={{ color: 'var(--color-danger)', marginTop: 8 }}>{error}</p>}
     </>

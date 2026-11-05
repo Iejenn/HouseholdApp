@@ -1,4 +1,5 @@
 import type { WeatherLocation } from '../types';
+import { currentLang, t } from '../i18n/core';
 
 // Weather from Open-Meteo: free, no API key, called straight from the app.
 export interface DayForecast {
@@ -16,14 +17,14 @@ export interface Forecast {
 
 // WMO weather codes → emoji + short Dutch description
 export function describeWeather(code: number): { emoji: string; label: string } {
-  if (code === 0) return { emoji: '☀️', label: 'Zonnig' };
-  if (code <= 2) return { emoji: '🌤️', label: 'Licht bewolkt' };
-  if (code === 3) return { emoji: '☁️', label: 'Bewolkt' };
-  if (code === 45 || code === 48) return { emoji: '🌫️', label: 'Mist' };
-  if (code >= 51 && code <= 57) return { emoji: '🌦️', label: 'Motregen' };
-  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return { emoji: '🌧️', label: 'Regen' };
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return { emoji: '🌨️', label: 'Sneeuw' };
-  if (code >= 95) return { emoji: '⛈️', label: 'Onweer' };
+  if (code === 0) return { emoji: '☀️', label: t('Zonnig') };
+  if (code <= 2) return { emoji: '🌤️', label: t('Licht bewolkt') };
+  if (code === 3) return { emoji: '☁️', label: t('Bewolkt') };
+  if (code === 45 || code === 48) return { emoji: '🌫️', label: t('Mist') };
+  if (code >= 51 && code <= 57) return { emoji: '🌦️', label: t('Motregen') };
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return { emoji: '🌧️', label: t('Regen') };
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return { emoji: '🌨️', label: t('Sneeuw') };
+  if (code >= 95) return { emoji: '⛈️', label: t('Onweer') };
   return { emoji: '🌤️', label: '' };
 }
 
@@ -54,7 +55,7 @@ export async function fetchForecast(loc: WeatherLocation): Promise<Forecast> {
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
     '&timezone=Europe%2FAmsterdam&forecast_days=7';
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Weer ophalen mislukt (${res.status})`);
+  if (!res.ok) throw new Error(t('Weer ophalen mislukt ({status})', { status: res.status }));
   const data = await res.json();
   const forecast: Forecast = {
     currentTemp: Math.round(data.current.temperature_2m),
@@ -83,17 +84,17 @@ const round = (n: number) => Math.round(n * 100) / 100;
 export function currentPosition(): Promise<WeatherLocation> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Deze telefoon kan geen locatie delen.'));
+      reject(new Error(t('Deze telefoon kan geen locatie delen.')));
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: round(pos.coords.latitude), lon: round(pos.coords.longitude), name: 'Huidige locatie' }),
+      (pos) => resolve({ lat: round(pos.coords.latitude), lon: round(pos.coords.longitude), name: t('Huidige locatie') }),
       (err) =>
         reject(
           new Error(
             err.code === err.PERMISSION_DENIED
-              ? 'Locatie geweigerd. Kies hieronder een plaats.'
-              : 'Locatie niet gevonden. Kies hieronder een plaats.'
+              ? t('Locatie geweigerd. Kies hieronder een plaats.')
+              : t('Locatie niet gevonden. Kies hieronder een plaats.')
           )
         ),
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60 * 1000 }
@@ -103,9 +104,9 @@ export function currentPosition(): Promise<WeatherLocation> {
 
 // Town search (for when location access isn't wanted)
 export async function searchPlaces(name: string): Promise<WeatherLocation[]> {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=5&language=nl&format=json`;
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=5&language=${currentLang()}&format=json`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('Zoeken mislukt.');
+  if (!res.ok) throw new Error(t('Zoeken mislukt.'));
   const data = await res.json();
   return ((data.results ?? []) as { latitude: number; longitude: number; name: string; admin1?: string; country_code?: string }[]).map(
     (r) => ({

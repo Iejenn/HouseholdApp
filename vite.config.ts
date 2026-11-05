@@ -6,9 +6,23 @@ import { VitePWA } from 'vite-plugin-pwa'
 // BASE_PATH for that; local dev and Bolt keep using the root '/'
 const base = process.env.BASE_PATH ?? '/'
 
+// Version = the build date in Dutch time, e.g. "2026.11.05". Every deploy is
+// a build, so every release day gets its own number automatically.
+const appVersion = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Amsterdam',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+  .format(new Date())
+  .replaceAll('-', '.')
+
 // https://vite.dev/config/
 export default defineConfig({
   base,
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     react(),
     VitePWA({

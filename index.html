@@ -58,13 +58,21 @@
         <div class="splash-stage"><div class="splash-spin" id="splash-pot"></div></div>
         <div class="splash-shadow"></div>
       </div>
-      <p class="splash-title">Je huishouden wordt geladen</p>
+      <p class="splash-title" id="splash-title">Je huishouden wordt geladen</p>
       <div class="splash-dots"><span></span><span></span><span></span></div>
     </div>
     <script>
       // Builds the spinning flowerpot: a tapered "cylinder" of flat panels in
       // CSS 3D (no 3D library, so it shows instantly), with soil and leaves.
       (function () {
+        // Same language choice as the app (src/i18n/core.ts): the saved one,
+        // otherwise the phone's language
+        var lang = null;
+        try { lang = localStorage.getItem('lang'); } catch (e) {}
+        if (lang !== 'nl' && lang !== 'en') lang = (navigator.language || '').toLowerCase().indexOf('nl') === 0 ? 'nl' : 'en';
+        if (lang === 'en') document.getElementById('splash-title').textContent = 'Loading your household';
+        document.documentElement.lang = lang;
+
         var pot = document.getElementById('splash-pot');
         var N = 20, H = 60, RT = 38, RB = 28, RIM = 13;
         var rad = Math.PI / N;

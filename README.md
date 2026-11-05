@@ -52,3 +52,19 @@ Eenmalig nodig (Google Cloud, project household-14b3e):
   ```bash
   npx firebase-tools@latest functions:secrets:set GOOGLE_CLIENT_SECRET --project household-14b3e
   ```
+
+## Talen (Nederlands / English)
+
+- Teksten in de app staan in het Nederlands in de code, verpakt in `t('…')`.
+  De Engelse vertaling staat in `src/i18n/en.ts` (sleutel = de Nederlandse tekst).
+- Variabelen gaan tussen accolades: `t('{n} te halen', { n: 4 })`.
+- `npm run check:i18n` laat zien welke `t()`-teksten nog geen Engelse vertaling hebben.
+- Pushmeldingen worden vertaald in `functions/i18n.js`, in de taal van de ontvanger
+  (`users/{uid}.language`, standaard Nederlands).
+
+## Versie en "Wat is er nieuw"
+
+- Het versienummer is de builddatum (bijv. `2026.11.05`), automatisch per deploy.
+- Nieuwe dingen die gebruikers merken: voeg bovenaan `src/data/changelog.ts` een item toe
+  (Nederlands én Engels) met de datum waarop het live gaat. Na de update zien gebruikers
+  het één keer in een pop-up, en altijd via Instellingen → "Wat is er nieuw?".

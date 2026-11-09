@@ -67,6 +67,15 @@ export type RecurrenceUnit = 'day' | 'week' | 'month';
 export interface Recurrence {
   unit: RecurrenceUnit;
   interval: number;
+  // Optional fixed days (see lib/schedule.ts). Without them the task comes
+  // back `interval` days/weeks/months after the last check-off, as before.
+  weekdays?: number[]; // unit 'week': 0 = Monday … 6 = Sunday
+  monthDay?: number; // unit 'month': 1–31, or -1 = last day of the month
+  monthWeek?: number; // unit 'month': 1–4, or -1 = last, with monthWeekday
+  monthWeekday?: number; // 0 = Monday … 6 = Sunday
+  // Day number the schedule was set; decides which week/month counts for
+  // "om de week" and that a new task doesn't start in the past
+  startDay?: number;
 }
 export interface Task {
   id: string;

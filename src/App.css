@@ -2147,3 +2147,97 @@
 .app-version .link-button {
   font-size: 12px;
 }
+
+/* ── Repeat schedule in the task form ─────────────────────────────
+   Extra choices sit in one soft panel under the quick chips, and only
+   for the option that's picked, so the form stays calm */
+
+.repeat-detail {
+  background: var(--color-bg);
+  border-radius: 12px;
+  padding: 14px;
+  margin: -4px 0 16px;
+}
+
+.repeat-detail .segmented {
+  margin-bottom: 12px;
+}
+
+.repeat-detail .segmented:last-child {
+  margin-bottom: 0;
+}
+
+.field-label-soft {
+  font-weight: 400;
+}
+
+.day-picker {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.day-btn {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: 700 13px var(--font-body);
+  cursor: pointer;
+}
+
+.day-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.repeat-sentence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--color-ink-soft);
+}
+
+.repeat-sentence .input {
+  width: auto;
+  padding: 9px 10px;
+}
+
+.repeat-hint {
+  font-size: 12px;
+  color: var(--color-ink-soft);
+  margin: 10px 0 0;
+}
+
+.repeat-summary {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--color-line);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.repeat-summary strong {
+  color: var(--color-primary);
+}
+
+.repeat-summary-sub {
+  display: block;
+  font-size: 12.5px;
+  color: var(--color-ink-soft);
+  margin-top: 2px;
+}
+
+.task-checkbox:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

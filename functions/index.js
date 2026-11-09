@@ -7,6 +7,7 @@ import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/fire
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { tr } from './i18n.js';
+import { fixedState, hasFixedDays } from './schedule.js';
 
 const db = getFirestore();
 
@@ -240,9 +241,27 @@ function nextDueDay(day, { unit, interval }) {
   return d.getTime() / 86_400_000;
 }
 
+function fixedStateOf(task, today) {
+  return fixedState(task.completedAt ? dayNumber(task.completedAt) : null, task.recurrence, today);
+}
+
+// Due today: a one-off task with today's deadline, or a fixed-day task
+// whose day is today ("Container buiten zetten" on Monday)
+function isDueToday(task, today) {
+  if (!task.isRecurring) return !task.completedAt && task.dueAt != null && dayNumber(task.dueAt) === today;
+  if (!hasFixedDays(task.recurrence)) return false;
+  const { open, since } = fixedStateOf(task, today);
+  return open && since === today;
+}
+
 function isLate(task, today) {
   // One-off task with a deadline: late once that day is over
   if (!task.isRecurring) return !task.completedAt && task.dueAt != null && today > dayNumber(task.dueAt);
+  // Fixed day ("elke maandag"): late once that day is over (functions/schedule.js)
+  if (hasFixedDays(task.recurrence)) {
+    const { open, since } = fixedStateOf(task, today);
+    return open && today > since;
+  }
   if (!task.recurrence || !task.completedAt) return false;
   const due = nextDueDay(dayNumber(task.completedAt), task.recurrence);
   return today >= nextDueDay(due, task.recurrence);
@@ -285,10 +304,8 @@ export const dailyReminder = onSchedule(
       ]);
 
       const lateCount = tasks.docs.filter((t) => isLate(t.data(), today)).length;
-      // One-off tasks whose deadline is today
-      const dueToday = tasks.docs
-        .map((t) => t.data())
-        .filter((t) => !t.isRecurring && !t.completedAt && t.dueAt != null && dayNumber(t.dueAt) === today);
+      // One-off tasks whose deadline is today, and fixed-day tasks for today
+      const dueToday = tasks.docs.map((t) => t.data()).filter((t) => isDueToday(t, today));
       let lastFood = points.get('lastFoodAt');
       if (lastFood === undefined) {
         const food = await household.ref.collection('purchases').where('item', '==', 'food').get();

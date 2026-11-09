@@ -25,7 +25,7 @@ import { cachedForecast, describeWeather, fetchForecast } from '../lib/weather';
 import type { Forecast } from '../lib/weather';
 import { resolveDay } from '../lib/menu';
 import { DAY_KEYS, weekId } from '../lib/week';
-import { byDeadline, formatDeadline, isTaskDone, isTaskLate } from '../lib/time';
+import { byDeadline, isTaskDone, isTaskLate, taskDeadline } from '../lib/time';
 import { activeVacation, setVacation } from '../lib/vacation';
 import { useUndoCheck } from '../hooks/useUndoCheck';
 import UndoToast from '../components/UndoToast';
@@ -319,7 +319,8 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (to: HomeTarget
                 topTasks.map((task) => {
                   const late = isTaskLate(task, now);
                   const group = findTaskGroup(task.category);
-                  const deadline = !task.isRecurring && task.dueAt != null ? formatDeadline(task.dueAt, now) : null;
+                  // Deadline of a one-off task, or the day a fixed-day task was for
+                  const deadline = taskDeadline(task, now);
                   return (
                     <div key={task.id} className={`task-row${late ? ' late' : ''}`}>
                       <button

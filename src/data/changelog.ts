@@ -11,6 +11,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2026.11.09',
+    nl: [
+      '🔁 Herhalen op een vaste dag: "elke maandag", "de 1e van de maand" of "de 2e dinsdag". Kies Wekelijks of Maandelijks en tik een dag aan.',
+      '☀️ Staat zo\'n taak vandaag gepland, dan noemt de ochtendmelding hem ook.',
+    ],
+    en: [
+      '🔁 Repeat on a fixed day: "every Monday", "the 1st of the month" or "the 2nd Tuesday". Pick Weekly or Monthly and tap a day.',
+      '☀️ When such a task is planned for today, the morning notification mentions it too.',
+    ],
+  },
+  {
     version: '2026.11.05',
     nl: [
       '🌐 De app is nu ook in het Engels. Kies je taal bij Instellingen; meldingen komen ook in jouw taal.',

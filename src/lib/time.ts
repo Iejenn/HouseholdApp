@@ -1,5 +1,6 @@
 import type { Recurrence, Task } from '../types';
 import { t } from '../i18n/core';
+import { dayNumber, dayStartMs, fixedState, hasFixedDays } from './schedule';
 
 // Checked-off tasks and groceries disappear from the lists after this long
 export const HIDE_DONE_AFTER_MS = 72 * 60 * 60 * 1000;
@@ -23,6 +24,8 @@ export function nextDueAt(completedAt: number, r: Recurrence): number {
 // A recurring task counts as open again once its next due moment has passed —
 // computed on the fly, so no background job is needed to "reopen" it
 export function isTaskDone(task: Task, now: number): boolean {
+  // Fixed day: done until the next scheduled day (also before the first one)
+  if (task.isRecurring && hasFixedDays(task.recurrence)) return !fixedState(task.completedAt, task.recurrence, now).open;
   if (!task.completedAt) return false;
   if (task.isRecurring && task.recurrence) {
     return now < nextDueAt(task.completedAt, task.recurrence);
@@ -56,13 +59,45 @@ export function isTaskLate(task: Task, now: number): boolean {
   if (!task.isRecurring) {
     return !task.completedAt && task.dueAt != null && calendarDaysBetween(task.dueAt, now) > 0;
   }
+  // Fixed day: late once the scheduled day is over, like a deadline
+  if (hasFixedDays(task.recurrence)) {
+    const { open, since } = fixedState(task.completedAt, task.recurrence, now);
+    return open && since !== null && dayNumber(now) > since;
+  }
   if (!task.recurrence || !task.completedAt) return false;
   const due = nextDueAt(task.completedAt, task.recurrence);
   return now >= nextDueAt(due, task.recurrence);
 }
 
+// Fixed-day task that hasn't had its first scheduled day yet: nothing to
+// check off (and nothing to uncheck) until then
+export function isTaskWaiting(task: Task, now: number): boolean {
+  return task.isRecurring && hasFixedDays(task.recurrence) && fixedState(task.completedAt, task.recurrence, now).since === null;
+}
+
+// Deadline-style text for a task: a one-off task's deadline, or the day an
+// open fixed-day task was scheduled for ("moet vandaag", "2 dagen over tijd")
+export function taskDeadline(task: Task, now: number): ReturnType<typeof formatDeadline> | null {
+  if (!task.isRecurring) return task.dueAt != null ? formatDeadline(task.dueAt, now) : null;
+  if (!hasFixedDays(task.recurrence)) return null;
+  const { open, since } = fixedState(task.completedAt, task.recurrence, now);
+  return open && since !== null ? formatDeadline(dayStartMs(since), now) : null;
+}
+
 const SHORT_WEEKDAYS = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 const SHORT_MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+// "ma 16 nov" (short names translated where shown: t('di') → "Tue")
+export function shortDayDate(ms: number): string {
+  const d = new Date(ms);
+  return `${t(SHORT_WEEKDAYS[d.getDay()])} ${d.getDate()} ${t(SHORT_MONTHS[d.getMonth()])}`;
+}
+
+// "vandaag", "morgen" or "ma 16 nov"
+export function dayLabel(ms: number, now: number): string {
+  const days = calendarDaysBetween(now, ms);
+  return days === 0 ? t('vandaag') : days === 1 ? t('morgen') : shortDayDate(ms);
+}
 
 // Text for a one-off task's deadline: "uiterlijk za 8 nov", "vandaag",
 // "morgen" or "2 dagen over tijd". Tone tells the list which colour to use.
@@ -71,10 +106,8 @@ export function formatDeadline(dueAt: number, now: number): { text: string; tone
   if (days < 0) return { text: days === -1 ? t('1 dag over tijd') : t('{n} dagen over tijd', { n: -days }), tone: 'late' };
   if (days === 0) return { text: t('moet vandaag'), tone: 'today' };
   if (days === 1) return { text: t('uiterlijk morgen'), tone: 'soon' };
-  const d = new Date(dueAt);
-  // Short names are translated where shown (t('di') → "Tue")
   return {
-    text: t('uiterlijk {date}', { date: `${t(SHORT_WEEKDAYS[d.getDay()])} ${d.getDate()} ${t(SHORT_MONTHS[d.getMonth()])}` }),
+    text: t('uiterlijk {date}', { date: shortDayDate(dueAt) }),
     tone: 'soon',
   };
 }

@@ -1,6 +1,6 @@
 import { collection, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
-import { isTaskDone } from './time';
+import { isTaskDone, isTaskWaiting } from './time';
 import type { Completion, Task } from '../types';
 
 // Every check-off earns the household this many cat points
@@ -14,6 +14,8 @@ export async function toggleTaskDone(householdId: string, uid: string, task: Tas
   // Task update and point record are written together, so you can't get
   // a point without the task actually being checked off (and vice versa)
   const batch = writeBatch(db);
+  // A fixed-day task before its first day: nothing to check off or undo yet
+  if (isTaskWaiting(task, Date.now()) && !task.completedAt) return false;
   if (isTaskDone(task, Date.now())) {
     // Unchecking: put back the check-off before this one (keeps "laatst gedaan")
     batch.update(ref, {

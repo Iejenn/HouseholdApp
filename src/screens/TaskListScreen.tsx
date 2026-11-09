@@ -23,7 +23,9 @@ import { nudgeTask } from '../lib/push';
 import { toggleTaskDone } from '../lib/tasks';
 import { OTHER_GROUP_COLOR, TASK_GROUPS, findTaskGroup } from '../data/taskCatalog';
 import SectionCard from '../components/SectionCard';
-import { byDeadline, formatAgo, formatDeadline, isHiddenDone, isTaskDone, isTaskLate, startOfDay } from '../lib/time';
+import { byDeadline, dayLabel, formatAgo, isHiddenDone, isTaskDone, isTaskLate, isTaskWaiting, startOfDay, taskDeadline } from '../lib/time';
+import { formatRecurrence, ordinal, weekdayName } from '../lib/recurrenceText';
+import { dayNumber, dayStartMs, hasFixedDays, lastOccurrence, nextOccurrence, weekdayOf } from '../lib/schedule';
 import { useUndoCheck } from '../hooks/useUndoCheck';
 import { dutchError } from '../lib/firebaseErrors';
 import type { Recurrence, RecurrenceUnit, Task } from '../types';
@@ -36,12 +38,35 @@ const UNIT_LABELS: Record<RecurrenceUnit, [string, string]> = {
   month: ['maand', 'maanden'],
 };
 
-function formatRecurrence({ unit, interval }: Recurrence): string {
-  if (interval === 1) return unit === 'day' ? t('elke dag') : unit === 'week' ? t('elke week') : t('elke maand');
-  if (unit === 'week' && interval === 2) return t('om de week');
-  if (unit === 'day') return t('elke {n} dagen', { n: interval });
-  return unit === 'week' ? t('elke {n} weken', { n: interval }) : t('elke {n} maanden', { n: interval });
+type RepeatPreset = 'day' | 'week' | '2week' | 'month' | 'custom';
+
+const PRESETS: { id: RepeatPreset; label: string }[] = [
+  { id: 'day', label: 'Dagelijks' },
+  { id: 'week', label: 'Wekelijks' },
+  { id: '2week', label: 'Om de week' },
+  { id: 'month', label: 'Maandelijks' },
+  { id: 'custom', label: 'Anders…' },
+];
+
+// Which quick choice an existing schedule belongs to
+function presetOf(r: Recurrence | null): RepeatPreset {
+  if (!r) return 'week';
+  if (r.interval === 1 && r.unit !== 'day') return r.unit;
+  if (r.interval === 1 && r.unit === 'day') return 'day';
+  if (r.unit === 'week' && r.interval === 2) return '2week';
+  return 'custom';
 }
+
+// The schedule without its start day, to see if the days were changed
+function patternKey(r: Recurrence): string {
+  return JSON.stringify([r.unit, r.interval, r.weekdays ?? null, r.monthDay ?? null, r.monthWeek ?? null, r.monthWeekday ?? null]);
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const SHORT_DAYS = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 
 export default function TaskListScreen() {
   const { user } = useAuth();
@@ -128,12 +153,32 @@ export default function TaskListScreen() {
     const group = findTaskGroup(item.category);
     const recurring = item.isRecurring && item.recurrence;
     const late = !isDone && isTaskLate(item, now);
+    const waiting = isTaskWaiting(item, now);
     const who = item.assignedTo ? memberNames[item.assignedTo] ?? '…' : t('Allebei');
     const doneBy = item.completedBy ? memberNames[item.completedBy] ?? '…' : '…';
 
     // Recurring tasks show when they were last done instead of being struck through
     let meta: ReactNode;
-    if (recurring) {
+    if (recurring && hasFixedDays(item.recurrence)) {
+      // Fixed day: open ones show the day they were for (orange today, red
+      // after), done ones when they come back
+      const r = item.recurrence;
+      const deadline = taskDeadline(item, now);
+      const next = nextOccurrence(dayNumber(now), r);
+      const nextText = next !== null ? t('volgende: {date}', { date: dayLabel(dayStartMs(next), now) }) : '';
+      meta = deadline ? (
+        <>
+          {who} · {formatRecurrence(r)} · <span className={`deadline-${deadline.tone}`}>📅 {deadline.text}</span>
+        </>
+      ) : (
+        <>
+          {item.completedAt && !isTaskWaiting(item, now)
+            ? t('{when} gedaan door {name}', { when: formatAgo(item.completedAt, now), name: doneBy })
+            : formatRecurrence(r)}
+          {nextText && ` · ${nextText}`}
+        </>
+      );
+    } else if (recurring) {
       const lastDone = item.completedAt
         ? isDone
           ? t('{when} gedaan door {name}', { when: formatAgo(item.completedAt, now), name: doneBy })
@@ -148,7 +193,7 @@ export default function TaskListScreen() {
       );
     } else if (!isDone && item.dueAt != null) {
       // One-off task with a deadline: grey, orange on the day, red when missed
-      const deadline = formatDeadline(item.dueAt, now);
+      const deadline = taskDeadline(item, now)!;
       meta = (
         <>
           {who} · <span className={`deadline-${deadline.tone}`}>📅 {deadline.text}</span>
@@ -177,9 +222,11 @@ export default function TaskListScreen() {
           <button
             className={`task-checkbox${isDone ? ' done' : ''}`}
             onClick={() => toggleComplete(item)}
-            aria-label={isDone ? t('Markeer als niet gedaan') : t('Markeer als gedaan')}
+            // Before its first scheduled day there's nothing to check off yet
+            disabled={waiting}
+            aria-label={waiting ? t('Nog niet aan de beurt') : isDone ? t('Markeer als niet gedaan') : t('Markeer als gedaan')}
           >
-            {isDone ? '✓' : ''}
+            {isDone && !waiting ? '✓' : ''}
             {pointPopId === item.id && <span className="point-pop">+1 🐾</span>}
           </button>
           <div className="task-info">
@@ -190,7 +237,8 @@ export default function TaskListScreen() {
             </p>
             <p className="task-meta">{meta}</p>
           </div>
-          {isDone && (
+          {/* Nobody did it yet (fixed-day task before its first day): no heart */}
+          {isDone && !(waiting && !item.completedAt) && (
             <button
               className={`heart-btn${isBursting ? ' just-hearted' : ''}`}
               onClick={() => canHeart && toggleHeart(item)}
@@ -339,11 +387,24 @@ function AddTaskModal({
   const [title, setTitle] = useState(editing?.title ?? '');
   const [assignedTo, setAssignedTo] = useState<string | null>(editing?.assignedTo ?? null);
   const [isRecurring, setIsRecurring] = useState(editing?.isRecurring ?? false);
-  const [unit, setUnit] = useState<RecurrenceUnit>(editing?.recurrence?.unit ?? 'week');
+  const r0 = editing?.recurrence ?? null;
+  // Which quick choice is active; anything else is "Anders…"
+  const [preset, setPreset] = useState<RepeatPreset>(presetOf(r0));
+  const [unit, setUnit] = useState<RecurrenceUnit>(r0?.unit ?? 'week');
   // Kept as text so the field can be emptied while typing (a number state
   // snapped straight back to 1, so you couldn't delete the digit)
-  const [intervalText, setIntervalText] = useState(String(editing?.recurrence?.interval ?? 1));
+  const [intervalText, setIntervalText] = useState(String(r0?.interval ?? 1));
   const interval = Math.min(365, Math.max(1, parseInt(intervalText) || 1));
+  // Fixed days (optional). Month defaults come from today, so picking
+  // "Datum" or "Weekdag" starts at something sensible.
+  const today = dayNumber(Date.now());
+  const [weekdays, setWeekdays] = useState<number[]>(r0?.weekdays ?? []);
+  const [monthMode, setMonthMode] = useState<'free' | 'date' | 'weekday'>(
+    r0?.monthDay != null ? 'date' : r0?.monthWeek != null ? 'weekday' : 'free'
+  );
+  const [monthDay, setMonthDay] = useState(r0?.monthDay ?? new Date().getDate());
+  const [monthWeek, setMonthWeek] = useState(r0?.monthWeek ?? Math.min(4, Math.ceil(new Date().getDate() / 7)));
+  const [monthWeekday, setMonthWeekday] = useState(r0?.monthWeekday ?? weekdayOf(today));
   // Room for a custom task, so it lands in the right section of the list
   const [customCategory, setCustomCategory] = useState<string | null>(editing?.category ?? null);
   // Deadline (one-off tasks only): start of the chosen day, or null
@@ -394,6 +455,35 @@ function AddTaskModal({
         ? picked.map((item) => ({ title: group.title(t(item), t(group.label)), category: group.id }))
         : [];
 
+  // The schedule as saved on the task. Fields are left out rather than set
+  // to undefined (Firestore refuses undefined values).
+  function buildRecurrence(): Recurrence {
+    let r: Recurrence;
+    if (preset === 'day') r = { unit: 'day', interval: 1 };
+    else if (preset === 'week' || preset === '2week') r = { unit: 'week', interval: preset === 'week' ? 1 : 2 };
+    else if (preset === 'month') {
+      r = { unit: 'month', interval: 1 };
+      if (monthMode === 'date') r.monthDay = monthDay;
+      if (monthMode === 'weekday') Object.assign(r, { monthWeek, monthWeekday });
+    } else r = { unit, interval };
+    if (r.unit === 'week' && preset !== 'day' && weekdays.length > 0) r.weekdays = [...weekdays].sort((a, b) => a - b);
+    if (hasFixedDays(r)) {
+      // Same days as before: keep the old start, so "om de week" doesn't
+      // shift a week just because the task was renamed
+      const same = r0 && hasFixedDays(r0) && patternKey(r0) === patternKey(r);
+      r.startDay = same && r0.startDay != null ? r0.startDay : today;
+    }
+    return r;
+  }
+  const recurrence = buildRecurrence();
+  const fixed = hasFixedDays(recurrence);
+  // First scheduled day from today, for "Volgende: ma 16 nov"
+  const firstDay = fixed
+    ? lastOccurrence(today, recurrence) === today
+      ? today
+      : nextOccurrence(today, recurrence)
+    : null;
+
   async function handleAdd() {
     if (newTitles.length === 0) {
       setError(kind === 'custom' ? t('Geef de taak een naam.') : t('Kies minstens één taak.'));
@@ -407,7 +497,7 @@ function AddTaskModal({
           category: newTitles[0].category,
           assignedTo,
           isRecurring,
-          recurrence: isRecurring ? { unit, interval } : null,
+          recurrence: isRecurring ? recurrence : null,
           // Recurring tasks have their own rhythm, so no deadline
           dueAt: isRecurring ? null : dueAt,
         });
@@ -431,7 +521,7 @@ function AddTaskModal({
           createdBy,
           assignedTo,
           isRecurring,
-          recurrence: isRecurring ? { unit, interval } : null,
+          recurrence: isRecurring ? recurrence : null,
           dueAt: isRecurring ? null : dueAt,
           completedAt: null,
           completedBy: null,
@@ -600,54 +690,138 @@ function AddTaskModal({
 
         {isRecurring && (
           <>
-            <span className="field-label">{t('Snel kiezen')}</span>
+            <span className="field-label">{t('Hoe vaak?')}</span>
             <div className="chip-row">
-              {([
-                { label: t('Dagelijks'), unit: 'day', interval: 1 },
-                { label: t('Wekelijks'), unit: 'week', interval: 1 },
-                { label: t('Om de week'), unit: 'week', interval: 2 },
-                { label: t('Maandelijks'), unit: 'month', interval: 1 },
-              ] as const).map((p) => (
+              {PRESETS.map((p) => (
                 <button
-                  key={p.label}
-                  className={`chip${unit === p.unit && interval === p.interval ? ' active' : ''}`}
-                  onClick={() => {
-                    setUnit(p.unit as RecurrenceUnit);
-                    setIntervalText(String(p.interval));
-                  }}
+                  key={p.id}
+                  className={`chip${preset === p.id ? ' active' : ''}`}
+                  onClick={() => setPreset(p.id)}
                 >
-                  {p.label}
+                  {t(p.label)}
                 </button>
               ))}
             </div>
 
-            <span className="field-label">{t('Of zelf instellen')}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: 'var(--color-ink-soft)' }}>{t('Elke')}</span>
-              <input
-                type="number"
-                min={1}
-                max={365}
-                inputMode="numeric"
-                value={intervalText}
-                onChange={(e) => setIntervalText(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                // Left empty or 0: fall back to 1 when leaving the field
-                onBlur={() => setIntervalText(String(interval))}
-                className="input"
-                style={{ width: 70, textAlign: 'center', padding: '10px 8px' }}
-              />
-              <select
-                value={unit}
-                onChange={(e) => setUnit(e.target.value as RecurrenceUnit)}
-                className="input"
-                style={{ width: 'auto', padding: '10px 12px' }}
-              >
-                {(['day', 'week', 'month'] as const).map((u) => (
-                  <option key={u} value={u}>
-                    {t(UNIT_LABELS[u][interval > 1 ? 1 : 0])}
-                  </option>
-                ))}
-              </select>
+            {/* Extra choices only for the picked option, in one quiet panel */}
+            {preset === 'custom' && (
+              <div className="repeat-detail">
+                <div className="repeat-sentence">
+                  <span>{t('Elke')}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    inputMode="numeric"
+                    value={intervalText}
+                    onChange={(e) => setIntervalText(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                    // Left empty or 0: fall back to 1 when leaving the field
+                    onBlur={() => setIntervalText(String(interval))}
+                    className="input"
+                    style={{ width: 70, textAlign: 'center' }}
+                  />
+                  <select value={unit} onChange={(e) => setUnit(e.target.value as RecurrenceUnit)} className="input">
+                    {(['day', 'week', 'month'] as const).map((u) => (
+                      <option key={u} value={u}>
+                        {t(UNIT_LABELS[u][interval > 1 ? 1 : 0])}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {(preset === 'week' || preset === '2week' || (preset === 'custom' && unit === 'week')) && (
+              <div className="repeat-detail">
+                <span className="field-label">
+                  {t('Op welke dag?')} <span className="field-label-soft">{t('(optioneel)')}</span>
+                </span>
+                <div className="day-picker">
+                  {SHORT_DAYS.map((d, i) => (
+                    <button
+                      key={d}
+                      className={`day-btn${weekdays.includes(i) ? ' active' : ''}`}
+                      onClick={() => setWeekdays((cur) => (cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i]))}
+                      aria-pressed={weekdays.includes(i)}
+                      aria-label={weekdayName(i)}
+                    >
+                      {t(d)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {preset === 'month' && (
+              <div className="repeat-detail">
+                <div className="segmented" role="radiogroup">
+                  {([
+                    ['free', 'Na afvinken'],
+                    ['date', 'Datum'],
+                    ['weekday', 'Weekdag'],
+                  ] as const).map(([id, label]) => (
+                    <button
+                      key={id}
+                      role="radio"
+                      aria-checked={monthMode === id}
+                      className={`segmented-item${monthMode === id ? ' active' : ''}`}
+                      onClick={() => setMonthMode(id)}
+                    >
+                      {t(label)}
+                    </button>
+                  ))}
+                </div>
+                {monthMode === 'date' && (
+                  <div className="repeat-sentence">
+                    <span>{t('Op de')}</span>
+                    <select value={monthDay} onChange={(e) => setMonthDay(Number(e.target.value))} className="input">
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <option key={i} value={i + 1}>
+                          {ordinal(i + 1)}
+                        </option>
+                      ))}
+                      <option value={-1}>{t('laatste dag')}</option>
+                    </select>
+                    <span>{t('van de maand')}</span>
+                  </div>
+                )}
+                {monthMode === 'weekday' && (
+                  <div className="repeat-sentence">
+                    <span>{t('Op de')}</span>
+                    <select value={monthWeek} onChange={(e) => setMonthWeek(Number(e.target.value))} className="input">
+                      {[1, 2, 3, 4, -1].map((n) => (
+                        <option key={n} value={n}>
+                          {n === -1 ? t('laatste') : ordinal(n)}
+                        </option>
+                      ))}
+                    </select>
+                    <select value={monthWeekday} onChange={(e) => setMonthWeekday(Number(e.target.value))} className="input">
+                      {SHORT_DAYS.map((d, i) => (
+                        <option key={d} value={i}>
+                          {weekdayName(i)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {monthMode === 'date' && monthDay > 28 && (
+                  <p className="repeat-hint">{t('Heeft een maand geen {nth}? Dan de laatste dag.', { nth: ordinal(monthDay) })}</p>
+                )}
+              </div>
+            )}
+
+            {/* What you picked, in one sentence (like Outlook) */}
+            <div className="repeat-summary">
+              <span aria-hidden="true">🔁</span>
+              <div>
+                <strong>{capitalize(formatRecurrence(recurrence))}</strong>
+                {fixed && firstDay !== null && (
+                  <span className="repeat-summary-sub">{t('Volgende: {date}', { date: dayLabel(dayStartMs(firstDay), Date.now()) })}</span>
+                )}
+                {!fixed && preset !== 'day' && (
+                  <span className="repeat-summary-sub">{t('Gerekend vanaf het afvinken')}</span>
+                )}
+              </div>
             </div>
           </>
         )}

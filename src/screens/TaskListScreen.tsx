@@ -740,7 +740,7 @@ function AddTaskModal({
                   {SHORT_DAYS.map((d, i) => (
                     <button
                       key={d}
-                      className={`day-btn${weekdays.includes(i) ? ' active' : ''}`}
+                      className={`weekday-btn${weekdays.includes(i) ? ' active' : ''}`}
                       onClick={() => setWeekdays((cur) => (cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i]))}
                       aria-pressed={weekdays.includes(i)}
                       aria-label={weekdayName(i)}

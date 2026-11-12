@@ -2177,7 +2177,8 @@
   gap: 4px;
 }
 
-.day-btn {
+/* Own name: .day-btn is already the week menu card buttons */
+.weekday-btn {
   width: 38px;
   height: 38px;
   flex-shrink: 0;
@@ -2189,7 +2190,7 @@
   cursor: pointer;
 }
 
-.day-btn.active {
+.weekday-btn.active {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: white;

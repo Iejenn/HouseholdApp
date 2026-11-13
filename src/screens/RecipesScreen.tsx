@@ -10,7 +10,7 @@ import UndoToast from '../components/UndoToast';
 import { addIngredientsToGroceries, addResultText, fromRecipe, parseIngredients } from '../lib/groceries';
 import { searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
-import type { Recipe } from '../types';
+import type { OneOffMeal, Recipe } from '../types';
 import { t } from '../i18n';
 
 // Recipe library (Gerechten). Opened from the Weekmenu and Boodschappen
@@ -141,17 +141,28 @@ export function RecipeEditor({
   onClose,
   onSaved,
   initialName = '',
+  initialIngredients = [],
+  onSavedOneOff,
+  editingMeal = false,
 }: {
   recipe: Recipe | null;
   onClose: () => void;
   onSaved?: (id: string) => void;
   // Pre-filled name for a new recipe, e.g. what you searched for
   initialName?: string;
+  initialIngredients?: string[];
+  // From the week menu: offers "Bewaren bij Gerechten" (off by default), so
+  // an everyday meal like "aardappels met schnitzel" is only for that day
+  onSavedOneOff?: (meal: OneOffMeal) => void;
+  // Changing a day's existing one-off meal (only changes the title)
+  editingMeal?: boolean;
 }) {
   const { user } = useAuth();
   const { householdId } = useHousehold();
   const [name, setName] = useState(recipe?.name ?? initialName);
-  const [ingredientsText, setIngredientsText] = useState(recipe?.ingredients.join('\n') ?? '');
+  const [ingredientsText, setIngredientsText] = useState((recipe?.ingredients ?? initialIngredients).join('\n'));
+  const [saveToLibrary, setSaveToLibrary] = useState(false);
+  const oneOff = !!onSavedOneOff && !recipe && !saveToLibrary;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const parsed = parseIngredients(ingredientsText);
@@ -164,6 +175,12 @@ export function RecipeEditor({
     }
     if (parsed.length > 50) {
       setError(t('Maximaal 50 ingrediënten.'));
+      return;
+    }
+    if (oneOff) {
+      // Only for this day: nothing is added to Gerechten
+      onSavedOneOff?.({ name: name.trim().slice(0, 60), ingredients: parsed });
+      onClose();
       return;
     }
     setBusy(true);
@@ -193,7 +210,9 @@ export function RecipeEditor({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">{recipe ? t('Gerecht bewerken') : t('Nieuw gerecht')}</h3>
+        <h3 className="modal-title">
+          {recipe ? t('Gerecht bewerken') : onSavedOneOff ? (editingMeal ? t('Maaltijd aanpassen') : t('Iets nieuws')) : t('Nieuw gerecht')}
+        </h3>
 
         <div style={{ marginBottom: 14 }}>
           <input
@@ -222,6 +241,16 @@ export function RecipeEditor({
               </span>
             ))}
           </div>
+        )}
+
+        {onSavedOneOff && !recipe && (
+          <label className="check-row">
+            <input type="checkbox" checked={saveToLibrary} onChange={(e) => setSaveToLibrary(e.target.checked)} />
+            <span>
+              {t('📖 Bewaren bij Gerechten')}
+              <small>{saveToLibrary ? t('Komt in je lijst, om vaker te kiezen') : t('Alleen voor deze dag')}</small>
+            </span>
+          </label>
         )}
 
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: '8px 0 12px' }}>{error}</p>}

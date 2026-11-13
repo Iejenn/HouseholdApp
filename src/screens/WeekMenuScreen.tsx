@@ -10,9 +10,9 @@ import { DAY_KEYS, addDays, dayName, dayNameInSentence, shortDate, weekId, weekR
 import { startOfDay } from '../lib/time';
 import { addIngredientsToGroceries, addResultText, fromRecipe } from '../lib/groceries';
 import type { IngredientToAdd } from '../lib/groceries';
-import { DEFAULT_DISHES, resolveDay, searchRecipes } from '../lib/menu';
+import { DEFAULT_DISHES, isOneOff, resolveDay, searchRecipes } from '../lib/menu';
 import { dutchError } from '../lib/firebaseErrors';
-import type { DayKey, Recipe, WeekMenu } from '../types';
+import type { DayKey, MenuValue, Recipe, WeekMenu } from '../types';
 import { t } from '../i18n';
 
 export default function WeekMenuScreen() {
@@ -56,8 +56,9 @@ export default function WeekMenuScreen() {
     window.setTimeout(() => setInfo((cur) => (cur === text ? null : cur)), 3500);
   }
 
-  // value: a recipe id, null = nothing, 'default' = back to the day's default (none at the moment)
-  async function setDay(week: string, key: DayKey, value: string | null | 'default') {
+  // value: a recipe id, a one-off meal, null = nothing,
+  // 'default' = back to the day's default (none at the moment)
+  async function setDay(week: string, key: DayKey, value: MenuValue | 'default') {
     try {
       // merge: only this one day changes, so you can both plan at the same time
       await setDoc(
@@ -219,24 +220,30 @@ function RecipePicker({
 }: {
   day: DayKey;
   recipes: Recipe[];
-  current: string | null | undefined;
-  onPick: (value: string | null | 'default') => void;
+  current: MenuValue | undefined;
+  onPick: (value: MenuValue | 'default') => void;
   onClose: () => void;
 }) {
-  const [creating, setCreating] = useState(false);
+  // 'new' = something new for this day, 'edit' = change this day's one-off meal
+  const [creating, setCreating] = useState<'new' | 'edit' | null>(null);
   const [filter, setFilter] = useState('');
   // Searches names and ingredients, so it stays usable with 20–30+ dishes
   const shown = searchRecipes(recipes, filter);
 
   if (creating) {
-    // New recipe straight from the menu: save it and plan it on this day.
+    // Something new straight from the menu: only for this day, unless
+    // "Bewaren bij Gerechten" is switched on (then it's planned as a recipe).
     // A search that found nothing becomes the suggested name.
+    const meal = creating === 'edit' && isOneOff(current) ? current : null;
     return (
       <RecipeEditor
         recipe={null}
-        initialName={shown.length === 0 ? filter.trim() : ''}
+        initialName={meal ? meal.name : shown.length === 0 ? filter.trim() : ''}
+        initialIngredients={meal?.ingredients ?? []}
         onClose={onClose}
         onSaved={(newId) => onPick(newId)}
+        onSavedOneOff={(m) => onPick(m)}
+        editingMeal={!!meal}
       />
     );
   }
@@ -245,6 +252,13 @@ function RecipePicker({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <h3 className="modal-title">{t('Wat eten we {day}?', { day: dayNameInSentence(day) })}</h3>
+        {isOneOff(current) && (
+          // This day's one-off meal: change it, or keep it in Gerechten after all
+          <button className="picker-item active" onClick={() => setCreating('edit')} style={{ marginBottom: 12, width: '100%' }}>
+            <span className="picker-name">✏️ {current.name}</span>
+            <span className="picker-sub">{t('Aanpassen of alsnog bewaren bij Gerechten')}</span>
+          </button>
+        )}
         {recipes.length > 0 && (
           <input
             className="input"
@@ -274,8 +288,8 @@ function RecipePicker({
             <p className="settings-note">{t('Geen gerecht gevonden met "{query}".', { query: filter.trim() })}</p>
           )}
         </div>
-        <button className="btn btn-secondary btn-block" onClick={() => setCreating(true)} style={{ margin: '12px 0 8px' }}>
-          {shown.length === 0 && filter.trim() ? t('+ Nieuw gerecht "{name}"', { name: filter.trim() }) : t('+ Nieuw gerecht')}
+        <button className="btn btn-secondary btn-block" onClick={() => setCreating('new')} style={{ margin: '12px 0 8px' }}>
+          {shown.length === 0 && filter.trim() ? t('+ "{name}"', { name: filter.trim() }) : t('+ Iets nieuws')}
         </button>
         {DEFAULT_DISHES[day] && (
           // Clearing the stored value brings back the default (e.g. Patat)

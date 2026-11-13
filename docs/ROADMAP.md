@@ -1,4 +1,4 @@
-# Roadmap Huishouden (stand 6 november 2026)
+# Roadmap Huishouden (stand 13 november 2026)
 
 Doel: de app verkopen als abonnement van **€0,99 per maand per huishouden**
 (eventueel ook **€8,99 per jaar**), via de Play Store (Android) en later PayPal
@@ -18,6 +18,8 @@ voor iPhone-huishoudens.
 
 ## Klaar
 
+- ✅ Herhalen op een vaste dag: elke maandag, de 1e van de maand, de 2e dinsdag (PR #36, fix #37)
+- ✅ Weekmenu: eenmalige maaltijd die niet bij Gerechten komt, tenzij je "Bewaren bij Gerechten" aanzet (PR #38)
 - ✅ Engels + taalkeuze per persoon, meldingen in de taal van de ontvanger (PR #34)
 - ✅ Versienummer = builddatum, "Wat is er nieuw"-pop-up (PR #34)
 - ✅ Kostenbesparing: samenvattingen in `stats/` door Cloud Functions,
@@ -25,7 +27,8 @@ voor iPhone-huishoudens.
 - ✅ Kat kiezen, reacties op briefjes, updates in één keer, laadscherm,
   deadlines, vakantiemodus (eerdere PR's)
 
-**Nog te doen door Ian:** Cloud Functions deployen na PR #34 (meldingen in eigen taal).
+**Nog te doen door Ian:** Cloud Functions deployen (na PR #34 meldingen in eigen taal, na PR #36
+taken met een vaste dag in de ochtendmelding). Eén keer deployen is genoeg voor allebei.
 
 ## Volgende stappen (in deze volgorde)
 

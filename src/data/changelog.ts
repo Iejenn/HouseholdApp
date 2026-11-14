@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2026.11.13',
+    nl: [
+      '🍽️ Iets eenmaligs in het weekmenu, zoals "aardappels, erwtjes en schnitzel", komt niet meer vanzelf bij Gerechten. Wil je het wel bewaren? Zet dan "Bewaren bij Gerechten" aan.',
+    ],
+    en: [
+      '🍽️ A one-off meal in the week menu, like "potatoes, peas and schnitzel", no longer ends up in Dishes. Want to keep it? Switch on "Save to Dishes".',
+    ],
+  },
+  {
     version: '2026.11.09',
     nl: [
       '🔁 Herhalen op een vaste dag: "elke maandag", "de 1e van de maand" of "de 2e dinsdag". Kies Wekelijks of Maandelijks en tik een dag aan.',

@@ -142,7 +142,15 @@ export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 // households/{id}/weekMenus/{weekId}, weekId like "2026-KW45".
 // Per day: a recipe id, null = deliberately nothing, missing = default
 // (Friday's default is patat).
+// A meal for just one day ("Aardappels, erwtjes, schnitzel"), stored in the
+// week menu itself so it doesn't fill up the Gerechten library
+export interface OneOffMeal {
+  name: string;
+  ingredients: string[];
+}
+// Per day: a recipe id, a one-off meal, or null = nothing planned
+export type MenuValue = string | OneOffMeal | null;
 export interface WeekMenu {
-  days: Partial<Record<DayKey, string | null>>;
+  days: Partial<Record<DayKey, MenuValue>>;
   updatedAt: number;
 }

@@ -5,8 +5,6 @@ export const EN: Record<string, string> = {
   "(jij)": "(you)",
   "+ Briefje": "+ Note",
   "+ Kies een gerecht": "+ Pick a dish",
-  "+ Nieuw gerecht": "+ New dish",
-  "+ Nieuw gerecht \"{name}\"": "+ New dish \"{name}\"",
   "+{n} eerder": "+{n} earlier",
   "1 dag over tijd": "1 day overdue",
   "1 ding op de boodschappenlijst gezet": "Added 1 item to the shopping list",
@@ -578,4 +576,14 @@ export const EN: Record<string, string> = {
   "Na afvinken": "After done",
   "Datum": "Date",
   "Weekdag": "Weekday",
+
+  // One-off meals in the week menu
+  "Maaltijd aanpassen": "Edit meal",
+  "Iets nieuws": "Something new",
+  "📖 Bewaren bij Gerechten": "📖 Save to Dishes",
+  "Komt in je lijst, om vaker te kiezen": "Added to your list, to pick again later",
+  "Alleen voor deze dag": "Just for this day",
+  "Aanpassen of alsnog bewaren bij Gerechten": "Edit, or save it to Dishes after all",
+  "+ \"{name}\"": "+ \"{name}\"",
+  "+ Iets nieuws": "+ Something new",
 };

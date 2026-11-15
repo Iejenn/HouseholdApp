@@ -161,6 +161,18 @@ service cloud.firestore {
         allow delete: if isMember();
       }
 
+      // Household settings. For now only the shop order of the grocery list:
+      // { ranks: { product: number }, updatedAt }, written by any member
+      match /settings/{settingId} {
+        allow read: if isMember();
+        allow create, update: if isMember()
+          && settingId == 'groceryOrder'
+          && request.resource.data.keys().hasOnly(['ranks', 'updatedAt'])
+          && request.resource.data.ranks is map
+          && request.resource.data.ranks.size() <= 2000;
+        allow delete: if false;
+      }
+
       // Recipe library (Gerechten): a name plus a list of ingredients
       match /recipes/{recipeId} {
         function validRecipe() {

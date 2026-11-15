@@ -586,4 +586,9 @@ export const EN: Record<string, string> = {
   "Aanpassen of alsnog bewaren bij Gerechten": "Edit, or save it to Dishes after all",
   "+ \"{name}\"": "+ \"{name}\"",
   "+ Iets nieuws": "+ Something new",
+
+  // Grocery shop order (drag ⠿)
+  "Volgorde opslaan lukte niet.": "Couldn't save the order.",
+  "Sleep ⠿ om de volgorde van je winkel te maken": "Drag ⠿ to match the order of your shop",
+  "Sleep om te verplaatsen": "Drag to move",
 };

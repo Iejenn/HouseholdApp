@@ -2269,3 +2269,41 @@
   color: var(--color-ink-soft);
   margin-top: 2px;
 }
+
+/* Grocery shop order: drag the ⠿ handle to move an item */
+.drag-row {
+  position: relative;
+}
+
+.drag-row.dragging {
+  z-index: 5;
+}
+
+.task-row.is-dragging {
+  background: var(--color-surface);
+  box-shadow: 0 8px 22px rgba(46, 42, 38, 0.18);
+  border-radius: var(--radius-sm);
+}
+
+.drag-handle {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  /* Big enough to grab with a thumb */
+  padding: 0 4px 0 14px;
+  margin-right: -6px;
+  font-size: 20px;
+  color: var(--color-ink-soft);
+  opacity: 0.55;
+  cursor: grab;
+  /* The browser must not scroll or zoom when a drag starts here */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.is-dragging .drag-handle {
+  cursor: grabbing;
+  opacity: 1;
+}

@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2026.11.15',
+    nl: [
+      '🛒 Zet je boodschappen in de volgorde van je supermarkt: sleep ze aan het ⠿-greepje. De app onthoudt waar elk product hoort, ook volgende keer. Nieuwe dingen komen onderaan.',
+    ],
+    en: [
+      '🛒 Put your groceries in the order of your supermarket: drag them by the ⠿ handle. The app remembers where each product goes, next time too. New things go at the bottom.',
+    ],
+  },
+  {
     version: '2026.11.13',
     nl: [
       '🍽️ Iets eenmaligs in het weekmenu, zoals "aardappels, erwtjes en schnitzel", komt niet meer vanzelf bij Gerechten. Wil je het wel bewaren? Zet dan "Bewaren bij Gerechten" aan.',
